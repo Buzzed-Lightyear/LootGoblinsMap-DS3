@@ -357,3 +357,129 @@ Ambiguities resolved without asking, per BRIEF.md. Roughly chronological.
 - **Replay script format** extended with `@map` and `@flag` lines; the old "x,y,z per line"
   files still load.
 - **Committed locally in three steps on `phase3-full-map`; nothing pushed.**
+
+## Phase 4 (2026-11-20)
+
+### Scope and order
+
+- **The brief was amended first**, as the owner asked: DLC areas in scope; an unknown map id
+  means an unsupported game build; two fixes before the first release; an optional tail
+  (bosses, then controller bindings).
+- **The theme model was written before alpha.1**, not after. The brief puts themes in part D,
+  after the first release, but the app's core loads its look from a theme, so the model had to
+  exist for part A. Alpha.1 therefore already has both themes. Alpha.2 carries what changed
+  after it.
+- **The optional tail was not started.** Bosses need the boss enemies, their names and their
+  defeat flags derived from the game's parameter tables and map files (no tables of game data
+  in source), which is a piece of research of its own. Controller bindings come after bosses
+  in the owner's order. Both are listed as open in the report.
+- **Agent instruction files left the repository** during the phase, on the owner's instruction
+  ("remove agent files from repo, will keep it local for now"). `CLAUDE.md` and the phase
+  briefs are untracked and ignored; they stay on disk. I read "agent files" as the files
+  written for the agent. This file, the report and the testing guide are records of the work
+  and stayed. Older commits still contain the removed files, because pushed history is never
+  rewritten.
+
+### Pre-release fixes
+
+- **A map id that is not one.** The builder writes every map id found in the archives into
+  `index.json` (`knownMapIds`, 36 on this install). A value read from memory that is not in
+  that list is not trusted: the shown map stays if the position is on it; otherwise the
+  position picks a map when exactly one fits; and a warning is shown in the overlay, the
+  debug readout and the launcher. A known id without a built map keeps its old meaning
+  ("no map for this area"). With an index from before this change (no list) the built maps
+  count as the known ones.
+- **Treasures with no polygon in reach** are placed on the layer of the polygon nearest in
+  height, searching outwards from 40 m in doubling steps. Height first, sideways distance as
+  the tie-break. They are flagged `offMesh`. Unused leftovers and bonfires are never guessed
+  onto a layer. Result on this install: 6 placed, none left without a layer.
+- **Weapon split.** The weapon table's category byte tells them apart: 8 catalysts (staves,
+  talismans, chimes, flames), 12 shields, 13 and 14 arrows and bolts. Offsets from Paramdex
+  as before (row size 0x260, category at 0xE2), checked against the real file at build time.
+  An infused or reinforced item is looked up by its base id. Counts after the rebuild:
+  weapons 62, shields 24, catalysts 10, ammunition 6.
+
+### Part A: the app
+
+- **One program.** The tracker project now builds `LootGoblinsMap.exe` and references the
+  builder project, which stays a command-line program for development. Namespaces and the
+  project file name were left alone to keep the change small.
+- **Data folder**: `%LocalAppData%\LootGoblinsMap`, overridable with `--data` or the
+  `LOOTGOBLINSMAP_DATA` variable. Local, not roaming: maps are large and derived. Settings
+  from phase 3 (`%APPDATA%\LootGoblinsMap\settings.json`) are copied over once. A development
+  run (`--config`) uses `work\appdata` so it never mixes with an installed copy.
+- **Finding the game**: Steam's install path from the registry (read-only), then
+  `libraryfolders.vdf` in both its old and new layout, then the usual Program Files folders.
+  A folder counts as the game when the archives are in it. No game is ever started or asked.
+- **Rebuild detection**: a hash over the names, sizes and modified times of the archive files.
+  No archive content is read for it. A change offers a rebuild; it is not forced.
+- **Opening the data folder** uses the Windows shell's automation object. The two usual ways
+  to open a folder from a program are on the banned list (they start programs), and the list
+  does not change. If the shell object is not available the app shows the path instead.
+- **Exclusive fullscreen** is recognised from the screen mode in the game's own settings file
+  in the user's profile (not in the game folder, read only). A window query cannot tell
+  borderless from exclusive reliably without calls that are not on the allow-list.
+- **Elevation.** The app refuses to do anything but report its version when it is elevated,
+  as before. No new native functions were needed in this phase: the allow-list is unchanged.
+- **Single file.** The release is one self-contained executable (the .NET and WPF runtimes
+  inside it) plus the font folder and the license files. No trimming, because WPF does not
+  support it.
+- **Console output.** A windowed program prints nothing to a console that started it. The
+  function that would attach to the console is outside the four allowed purposes, so the
+  windowless modes are used with a pipe or with `--out <file>`.
+- **Feedback note** records time, version, map, layer, position, how the map was chosen and
+  the five nearest markers. The export holds logs, settings, state and the build report; maps
+  and the extraction cache are never included.
+
+### Part B: CI and releases
+
+- **Action versions** were looked up with `git ls-remote` on 2026-11-20 and pinned by commit:
+  checkout v7.0.1, setup-dotnet v6.1.0, configure-pages v6.0.0, upload-pages-artifact v5.0.0,
+  deploy-pages v5.0.1. All are GitHub's own.
+- **The release is created with the `gh` tool on the runner** and the built-in token, so no
+  third-party release action is needed. Permissions: `contents: write` for the release
+  workflow, `contents: read` for CI, the three Pages permissions for the page.
+- **The guard** fails on game file types, the builder's output file names, anything under
+  `out/` or `work/`, images outside `site/images` and `docs/images`, and files over 2 MB.
+  It runs first in CI and in the release, and again on the unpacked zip.
+- **Hosted runners are administrators.** The app refuses to run elevated, so the first CI run
+  failed in the smoke test. The app was not weakened: on an administrator account the smoke
+  test checks the version, the shipped files, and that the app does refuse (exit code 3 and
+  nothing written). Rendering on the runner is covered by the test suite, and the full smoke
+  test runs on a normal account against the released zip.
+- **What is tested is what ships**: the packaging script zips first, unpacks the zip again and
+  tests that copy.
+
+### Part C: documents
+
+- **The README is for players.** Everything about building and the rules moved to
+  `docs/development.md`, which now states the rules itself.
+- **Pictures** are renders of a made-up demo area that the app generates (`--make-demo`). The
+  README has a commented list of named screenshot slots; no in-game screenshot is committed.
+- **The project page** is one HTML file with inline styles, no scripts and no outside
+  requests. It has its own copy of the bundled font, the same file under the same license.
+- **Online play wording.** The README and the page say what the program does and does not do,
+  and do not promise how a publisher judges memory reading.
+
+### Part D: themes
+
+- **Font**: EB Garamond Medium, SIL Open Font License 1.1, from `octaviopardo/EBGaramond12`
+  at commit `106a4a6d377987459ae5e68673a4570f13b957fb`, unmodified, loaded from the `Fonts`
+  folder next to the program. If the file is missing, an installed serif stands in.
+- **Paper for the full map, a dark disc for the minimap**, as the brief describes. Ink
+  outlines cannot be seen on a dark panel, so the full map got a paper background of its own.
+- **Icons on dark discs.** Pale category colours disappear on paper; a dark plate ringed in
+  the category colour reads on paper and over the game alike.
+- **Fills are drawn without edge smoothing.** The map is drawn in tiles, and smoothed edges
+  left hairlines where tiles meet. The outline on top hides the hard outer edge.
+- **Stairs** are every polygon steeper than the layering's own limit (15°), hatched with lines
+  of equal height. No knowledge of real stairs is involved.
+- **Paper grain** comes from a fixed seed, so pictures are the same on every run and machine.
+- **Built-in themes are reference copies.** Alpha.1 wrote the built-in themes into the themes
+  folder and then preferred those files, which would have frozen a user's look at the version
+  they first ran. From alpha.2 the built-in themes live in `themes\builtin` and are refreshed
+  on every start; a file directly in `themes` is the user's own and wins.
+- **Review** was done on renders of the demo area in both themes and of two real areas (kept
+  in `work\appdata\review`, not in the repository). Changes that came out of it: the paper
+  background, the icon plates, the seam fix, the banner moved off the player on the minimap,
+  labels that keep clear of the player's dot, and a stronger wash for upper layers.

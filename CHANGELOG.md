@@ -3,6 +3,23 @@
 What changed for people who use Loot Goblins Map. Newest first.
 Versions follow [semantic versioning](https://semver.org); a version with a hyphen (alpha, beta) is a pre-release.
 
+## 0.1.0-alpha.2
+
+### Changed
+
+- A name label no longer covers your own dot on the map. A label that has no room on one side
+  of its marker now tries the other side.
+- On the parchment full map, floors above the one you are on are easier to tell from the paper.
+- The built-in themes are now kept as reference copies in the `themes/builtin` folder and
+  are refreshed by every new version. To change one, copy it up into `themes` and edit the
+  copy; your file wins. (Alpha.1 put editable copies straight into `themes`, which would have
+  kept showing the old look after an update. If you ran alpha.1, delete `parchment.json` and
+  `plain.json` from your `themes` folder unless you edited them.)
+
+### New
+
+- Documentation: a readme for players, technical pages under `docs/`, and a project page.
+
 ## 0.1.0-alpha.1
 
 The first release you can download and run. Earlier work lived only in the source repository.

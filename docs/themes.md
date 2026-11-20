@@ -45,9 +45,17 @@ Settings, under "Look". Two are built in:
 ## Editing a theme
 
 Themes are JSON files in the `themes` folder of the data folder ("Open data folder" in the
-app). The built-in ones are written there the first time, so there is something to edit. A
-file with a new name is a new theme and appears in the settings list. If a file is broken,
-the built-in theme of that name is used; delete a file to get the built-in one back.
+app). The two built-in themes are kept as reference copies in `themes\builtin`. The program
+rewrites those, so do not edit them there.
+
+- To change a built-in theme, copy its file from `themes\builtin` up into `themes` and edit
+  the copy. A file named `parchment.json` in `themes` replaces the built-in parchment theme.
+- A file with a new name is a new theme and appears in the settings list.
+- If a file is broken, the built-in theme of that name is used. Delete your file to get the
+  built-in one back.
+
+A file only needs the fields you want to change; every other field takes the "plain"
+default. So start from a copy of the theme you like.
 
 Colours are written `#RRGGBB` or `#AARRGGBB` (the first pair is opacity). A colour that cannot
 be read is drawn in magenta, so the mistake is easy to find.

@@ -1,3 +1,61 @@
+# Testing the packaged app (phase 4)
+
+From phase 4 on, test with the released program, not from the repository. The steps written
+for phase 3 are kept below; what they describe still works the same way, but paths and
+commands changed. The current developer guide is `docs/development.md`.
+
+## Play test with the release
+
+1. Download the newest zip from the releases page and unzip it outside the game folder.
+2. Start `LootGoblinsMap.exe` (not as administrator). The first run finds the game and builds
+   the maps. The window shows how many maps were built and how long it took.
+3. Press **Start overlay**. Start the game in borderless or windowed mode, with Steam not run
+   as administrator, and load a character.
+4. Play. What to look at:
+   - **Pick up an item that is on the map.** Its marker should disappear within a second.
+     This is the one thing from phase 3 that has not been confirmed in play yet.
+   - Walk into another area: the area's name appears for a few seconds and the map changes.
+   - Stairs: the bright floor should change on the stairs, not on a level floor.
+   - `F7` full map, `Ctrl+PageUp` / `Ctrl+PageDown` layers, `F8` settings, `F9` hide.
+   - Settings, "Look": switch between the parchment and the plain theme.
+   - Shields, catalysts and ammunition have their own switches under "Items shown".
+5. Where something looks wrong, press `F10`. A note with your position and the markers around
+   you goes into the feedback log.
+6. Afterwards press **Export feedback** and send the zip from your desktop. It holds the logs
+   and your settings; no maps and nothing from the game.
+
+## What changed for the phase 3 steps below
+
+| Phase 3 | Now |
+| --- | --- |
+| `work\live_checks.log` | `%LocalAppData%\LootGoblinsMap\logs\live_checks.log` (with `run-tracker.cmd`: `work\appdata\logs\live_checks.log`) |
+| `%APPDATA%\LootGoblinsMap\settings.json` | `%LocalAppData%\LootGoblinsMap\settings.json`; the old file is copied over once |
+| `.\run-tracker.cmd` opens the debug window | `.\run-tracker.cmd` opens the app; add `--debug` for the debug window, `--overlay` for the overlay alone |
+| Output of `--probe` and `--overlay-check` appears in the console | The app is a windowed program: add `--out <file>` or `\| more` |
+
+## Checks without playing
+
+With the game running and a character loaded, from the unzipped release:
+
+```text
+LootGoblinsMap.exe --probe --seconds 5 --out probe.txt
+LootGoblinsMap.exe --overlay-check --out overlay.txt
+```
+
+Both only read. `--probe` ends with a `RESULT` line; exit code 0 is fine, 2 means the game is
+not running, 3 access denied (the game or Steam is elevated).
+
+Without the game:
+
+```text
+LootGoblinsMap.exe --data C:\Temp\lgm-demo --make-demo
+LootGoblinsMap.exe --data C:\Temp\lgm-demo --overlay --replay C:\Temp\lgm-demo\demo_walk.txt
+```
+
+plays a walk across a made-up pair of areas in the real overlay, over your desktop.
+
+---
+
 # Testing the loot map in the game
 
 The tracker only reads. It never starts, stops, focuses or sends input to the game, and it

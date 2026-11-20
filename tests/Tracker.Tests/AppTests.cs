@@ -73,13 +73,20 @@ public class AppTests
         string dir = TempDir();
         try
         {
-            // First use writes the built-in themes out, so there is something to edit.
+            // Reference copies of the built-in themes are written out, so there is something to copy and edit.
             var parchment = Theme.Load(dir, "parchment");
             Assert.AreEqual("parchment", parchment.Name);
-            Assert.IsTrue(File.Exists(Path.Combine(dir, "parchment.json")));
-            Assert.IsTrue(File.Exists(Path.Combine(dir, "plain.json")));
+            string reference = Path.Combine(dir, Theme.BuiltInFolder);
+            Assert.AreEqual(Theme.Parchment().ToJson(), File.ReadAllText(Path.Combine(reference, "parchment.json")));
+            Assert.IsTrue(File.Exists(Path.Combine(reference, "plain.json")));
+            Assert.IsFalse(File.Exists(Path.Combine(dir, "parchment.json")), "nothing is put where the user's own themes go");
 
-            // An edited file is what gets loaded; a file from an older version gets the newer categories filled in.
+            // A reference copy left by an older version is brought up to date; it is never what gets loaded.
+            File.WriteAllText(Path.Combine(reference, "parchment.json"), """{ "floor": "#000000" }""");
+            Assert.AreEqual(Theme.Parchment().Floor, Theme.Load(dir, "parchment").Floor);
+            Assert.AreEqual(Theme.Parchment().ToJson(), File.ReadAllText(Path.Combine(reference, "parchment.json")));
+
+            // A file of the same name in the themes folder replaces the built-in theme; one from an older version gets the newer categories filled in.
             File.WriteAllText(Path.Combine(dir, "parchment.json"), """{ "floor": "#112233", "outlineWidth": "3.5", "categoryColors": { "key": "#FFFFFF" } }""");
             var edited = Theme.Load(dir, "parchment");
             Assert.AreEqual("#112233", edited.Floor);

@@ -7,10 +7,10 @@ namespace Tracker.Rendering;
 
 /// <summary>
 /// Everything about how the map looks, in one place: colours, line weights, fonts, icon sizes
-/// and opacities. Themes are JSON files in the data folder's <c>themes</c> folder, written there
-/// from the built-in definitions on first use, so they can be tuned without touching code.
-/// Two are built in: "parchment" (ink on aged paper, the default) and "plain" (the flat look
-/// of the earlier versions).
+/// and opacities. Two themes are built in: "parchment" (ink on aged paper, the default) and
+/// "plain" (the flat look of the earlier versions). Reference copies of both are written to
+/// <c>themesuiltin</c> in the data folder on every start. A JSON file directly in
+/// <c>themes</c> is a theme of the user's own; one named like a built-in theme replaces it.
 /// </summary>
 public sealed class Theme
 {
@@ -127,10 +127,10 @@ public sealed class Theme
         RoundMinimap = true,
         Floor = "#F0E5C6",
         FloorOther = "#8CE2D4AC",
-        FloorAbove = "#A6B29C6C",
+        FloorAbove = "#C09A8459",
         FloorNeutral = "#C8E6DAB6",
         Outline = "#2B2118",
-        OutlineOther = "#8C5A4A33",
+        OutlineOther = "#A85A4A33",
         OutlineWidth = 1.8,
         OutlineOtherWidth = 0.9,
         LowerLayerFade = 0.8,
@@ -192,10 +192,14 @@ public sealed class Theme
         return names;
     }
 
+    /// <summary>Folder, inside the themes folder, that holds the reference copies of the built-in themes.</summary>
+    public const string BuiltInFolder = "builtin";
+
     /// <summary>
-    /// Loads a theme by name. A file in the themes folder wins; the built-in definitions are
-    /// written there the first time so there is something to edit. An unreadable file falls back
-    /// to the built-in theme of that name, or to "plain".
+    /// Loads a theme by name. A file in the themes folder wins over a built-in theme of the same
+    /// name. The built-in definitions are kept as reference copies in <see cref="BuiltInFolder"/>,
+    /// rewritten whenever they differ, so a new version's look arrives without touching the
+    /// user's own files. An unreadable file falls back to the built-in theme of that name, or to "plain".
     /// </summary>
     public static Theme Load(string? themesDir, string? name)
     {
@@ -205,12 +209,14 @@ public sealed class Theme
             return builtIn ?? Plain();
         try
         {
-            Directory.CreateDirectory(themesDir);
+            string reference = Path.Combine(themesDir, BuiltInFolder);
+            Directory.CreateDirectory(reference);
             foreach (var theme in BuiltIn())
             {
-                string builtInPath = Path.Combine(themesDir, theme.Name + ".json");
-                if (!File.Exists(builtInPath))
-                    File.WriteAllText(builtInPath, theme.ToJson());
+                string builtInPath = Path.Combine(reference, theme.Name + ".json");
+                string json = theme.ToJson();
+                if (!File.Exists(builtInPath) || File.ReadAllText(builtInPath) != json)
+                    File.WriteAllText(builtInPath, json);
             }
             string path = Path.Combine(themesDir, name + ".json");
             if (File.Exists(path) && JsonSerializer.Deserialize<Theme>(File.ReadAllText(path), JsonOpts) is { } loaded)

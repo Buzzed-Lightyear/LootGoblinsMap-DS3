@@ -24,8 +24,8 @@ LootGoblinsMap\
     ...
   cache\                 files extracted from the game's archives during a build
   themes\
-    parchment.json       editable copies of the built-in themes, and any of your own
-    plain.json
+    builtin\             reference copies of the built-in themes (rewritten by the program)
+    my-theme.json        themes of your own; one named parchment.json replaces the built-in one
   logs\
     live_checks.log      what the tracker saw: area changes, pickups, bonfire rests
     feedback.log         the notes dropped with the feedback hotkey
