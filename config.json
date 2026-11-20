@@ -4,7 +4,12 @@
   "gamePath": "G:\\SteamLibrary\\steamapps\\common\\DARK SOULS III",
   // External mod override folder, or null — this install has mods inside the game folder.
   "modPath": null,
+  // The map shown before the game says which one you are in.
   "mapId": "m30_00_00_00",
+  // Which maps to build: "all" (every map found in the archives) or a comma-separated list of ids.
+  "maps": "all",
+  // Folder of the game text under /msg, for item, bonfire and area names.
+  "language": "engus",
   "outDir": "out",
   "workDir": "work",
   "pixelsPerMeter": 6.0,

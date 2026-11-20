@@ -111,6 +111,9 @@ public sealed class TrackingSession
     /// <summary>Recent world positions, oldest first. A null entry is a break (warp or lost tracking).</summary>
     public IReadOnlyList<Vector3?> Trail => _trail;
 
+    /// <summary>Goes up whenever something other than the player's position changes what a map view shows: a flag, the map, the orientation.</summary>
+    public int Revision { get; private set; }
+
     public TrackingSession(MapData map, Orientation orientation) : this(MapSet.Single(map), map.Id, orientation) { }
 
     public TrackingSession(MapSet maps, string startMapId, Orientation orientation)
@@ -126,6 +129,7 @@ public sealed class TrackingSession
     {
         _orientation = orientation;
         Transform = Map.TransformFor(orientation);
+        Revision++;
         if (Current.HasPosition)
             (Current.PixelX, Current.PixelY) = Transform.ToPixel(Current.World);
     }
@@ -238,6 +242,7 @@ public sealed class TrackingSession
         _events.Add(new TrackEvent(time, TrackEventKind.MapSwitch, mapId, next.Name, Map.Id, method));
         Map = next;
         MapMethod = method;
+        Revision++;
         Transform = Map.TransformFor(_orientation);
         LastLayer = -1;
         _trail.Clear();
@@ -261,6 +266,8 @@ public sealed class TrackingSession
         {
             bool known = _flags.TryGetValue(flag, out bool previous);
             _flags[flag] = state;
+            if (!known || previous != state)
+                Revision++;
             if (!known || previous == state)
                 continue;
             var owners = Map.Markers.Where(m => !m.Unused && m.Flag == flag).ToList();

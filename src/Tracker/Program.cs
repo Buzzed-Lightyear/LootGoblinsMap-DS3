@@ -147,6 +147,24 @@ public static class Program
             e.Handled = true;
         };
 
+        if (Option(args, "--settings-png") is { } settingsPng)
+        {
+            // Self-check: a picture of the settings window, shown without taking the focus, then closed.
+            var settingsWindow = new SettingsWindow(core.Settings, Array.Empty<string>(), _ => Array.Empty<string>()) { ShowActivated = false };
+            settingsWindow.Show();
+            Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
+            var root = (FrameworkElement)settingsWindow.Content;
+            var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap((int)Math.Ceiling(root.ActualWidth), (int)Math.Ceiling(root.ActualHeight), 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+            bitmap.Render(root);
+            var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+            encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+            using (var fs = File.Create(settingsPng))
+                encoder.Save(fs);
+            settingsWindow.Close();
+            core.Dispose();
+            return 0;
+        }
+
         double? exitAfter = Option(args, "--exit-after") is { } ea ? double.Parse(ea, CultureInfo.InvariantCulture) : null;
         var started = Stopwatch.StartNew();
 

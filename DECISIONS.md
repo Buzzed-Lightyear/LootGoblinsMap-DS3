@@ -214,3 +214,146 @@ Ambiguities resolved without asking, per BRIEF.md. Roughly chronological.
   fewer layers than the one before.
 - **Coordinate space: verified by the owner's reading**, 0.73 m from bonfire 3001950 at the High
   Wall of Lothric bonfire. Not re-measured by the tool (the game was closed again).
+
+## Phase 3 (2026-11-20)
+
+### Scope
+
+- **DLC maps are built.** The brief puts DLC areas out of scope because they were "not
+  installed"; the owner downloaded the DLC archives just before this phase and asked whether
+  they would work. Discovery is by probing the archives, so the five DLC maps were found, built
+  and checked like the others. They are flagged `dlc` in `map.json` and `index.json`. Nothing was
+  added for them specifically.
+- **Bosses (stretch goal) not attempted.** Defeat flags and arena positions are not in any param
+  this tool reads; getting them from the game data means decoding the event scripts. A table
+  typed in by hand would be game data in source, which rule 8 forbids.
+- **The report's per-map table has map ids only.** A table of twenty area names is a table of
+  game text; the same table with names is in `out/build_report.md`, which is not in git.
+
+### Native calls added (rule 3), one line each
+
+- `FindWindowExW`: walk the top-level windows to find the game's window (no callback needed).
+- `GetWindowThreadProcessId`: tell which process a window belongs to.
+- `IsWindowVisible`: skip the game's hidden helper windows.
+- `IsIconic`: is the game minimized (hide the overlay).
+- `GetClientRect`: size of the game's client area.
+- `ClientToScreen`: where that client area is on the screen.
+- `GetWindowRect`: read back where the tracker's own overlay window ended up (self-check).
+- `GetForegroundWindow`: is the game in the foreground (show the overlay only then).
+- `GetWindowLongPtrW` / `SetWindowLongPtrW`: add click-through, no-activate and tool-window style to the tracker's own overlay window.
+- `SetWindowPos`: place the tracker's own overlay window, topmost, without activating it.
+- `RegisterHotKey` / `UnregisterHotKey`: global hotkeys delivered to the tracker's own window.
+- `XInputGetState`: read controller buttons for the optional chord.
+
+  The three calls that change a window, and the two hotkey calls, are private and reachable only
+  through wrappers that take an `OwnWindow`, which can only be made from one of the tracker's
+  own WPF windows. `System.Diagnostics.Process.MainWindowHandle` would have saved the window
+  walk, but it is on the phase 2 banned list, which stays as it is.
+
+### Part A
+
+- **Map discovery** probes `/map/mapstudio/mAA_BB_CC_DD.msb.dcx` for AA and BB from 00 to 99 and
+  CC, DD in {00, 01}: 40,000 hash lookups, no file reads. 36 map files, 20 with a navmesh.
+- **Current map: read from memory, verified live.** The field is PlayerIns + 0x1FE0, the
+  `Map (m??_??_??_??)` entry of the public Grand Archives cheat table
+  (`The-Grand-Archives/Dark-Souls-III-CT-TGA`, commit `6f6a1e0`). SoulMemory has no such read.
+  Only the offset was taken; the table has no license file and nothing else was copied from it.
+  At the High Wall bonfire it read `0x1E000000` and that value appears nowhere else in the first
+  0x2400 bytes of the structure. The method that ships is the map id. Position is the fallback
+  when no id can be read, and only when exactly one map fits.
+- **A map id of a map that was not built** (16 map files have no navmesh) shows "no map for this
+  area" and keeps the last map on screen rather than guessing by position.
+- **"Same space" in the overlap analysis** means two polygons from different maps overlapping in
+  top-down view within 3 m of height: what would make a position ambiguous.
+- **Image bounds.** Polygons are grouped by top-down proximity (8 m cells, groups up to 24 m
+  apart joined). A group is part of the map when it is the largest, or holds at least 1 % of the
+  polygons (and at least eight), or 5 % of the walkable area. Everything else is a stray: kept in
+  the polygon file, left out of the bounds. Thresholds chosen so that a real detached section
+  stays and lone polygons hundreds of metres off do not.
+- **Area names** come from the place-name text. The id is the first four digits of the play
+  region of the map's bonfires (300001 → 3000), taking the name most bonfires agree on; maps
+  without listed bonfires use area × 100 + block × 10. One map (m34_01) has bonfires whose play
+  region has no place name; it falls back to the name of its first bonfire, which is the area's
+  name in the game. One name per map: sub-areas inside a map are not told apart.
+- **Bonfire names and lit flags** come from `BonfireWarpParam`, matched on the bonfire's entity
+  id; the name id is looked up in the menu text. The hardcoded "High Wall" labels are gone.
+- **Acceptance thresholds.** The navmesh check now asks for 20 polygons and 10 m instead of 500
+  and 50 m, so the arena maps count as maps. The bonfire check asks for a bonfire marker only
+  where the game's table lists one for the map.
+- **Unused treasure events.** A treasure event whose item lots are all missing from the
+  regulation is flagged `unused`, kept in `map.json`, never shown and not counted in the checks.
+  There are 107; most sit on one parked point per map. Deciding this from the data (the lot
+  does not exist) rather than from the position.
+- **Markers on a neighbouring map.** A marker more than 8 m from its own map's navmesh but
+  within 2 m of another map's is shown on that other map, with `fromMap` recording where it is
+  defined. Only maps with listed bonfires take markers in, because arenas reuse coordinates by
+  coincidence (the first version moved a High Wall item into an arena). Three markers moved.
+- **Layer images are still written** for every map (`writeLayerImages`, on by default); the
+  tracker does not need them.
+
+### Part B
+
+- **Regulation.** `Data0.bdt` is AES-256-CBC with the first 16 bytes as IV and no padding, then a
+  BND4 of param files; scheme and key as in SoulsFormats (`SFUtil.DecryptDS3Regulation`).
+  Verified: it decrypts to a BND4 with 59 params.
+- **Own param reader instead of vendoring SoulsFormats' PARAM/PARAMDEF.** About 120 lines that
+  read the row table; fields are read at fixed offsets. The offsets were computed from the
+  layout definitions in `soulsmods/Paramdex` (commit `ff7245e`) and are written into
+  `ParamLayouts` as constants. Paramdex has no license file, so its XML files are not vendored;
+  only the offsets (facts about the format) are used. Each layout's row size is checked against
+  the real file at build time and a mismatch stops the build: all four matched (item lots 0x98,
+  goods 0x80, effects 0x320, bonfires 0x40).
+- **Text.** `FMG.cs` vendored from the already pinned SoulsFormatsNEXT commit. The archives hold
+  `item_dlc2.msgbnd` and `menu_dlc2.msgbnd` (the newest binder contains everything); the loader
+  takes the newest present. Text kinds are picked by binder file id (10/210/250 goods and so on),
+  not by the Japanese file names.
+- **Lot chains.** Consecutive lot ids continue a lot; the chain stops at the first missing id.
+  Every slot with an item and a share of the draw is an item; several slots in one row share a
+  draw and get a chance below 100 % (none of the 983 treasure items turned out to be a chance).
+  The first lot's flag is the marker's flag.
+- **Weapon names.** Reinforcement adds 1 to 10 and an infusion adds a multiple of 100 to the
+  base id; a weapon without its own text is named from the base with "+N".
+- **Categories** come from the lot's item category and, for goods, the goods type (1 key item,
+  2 upgrade material, 5 spell). "Souls" are consumables whose use effect grants souls
+  (`SpEffectParam.soul` > 0). Shields, ammunition and catalysts stay under weapons.
+- **Flags** are read with SoulMemory's own event-flag walk, vendored read-only with its two
+  scans. One guard added: a garbage count read while the game tears a structure down ends the
+  walk instead of looping.
+- **Polling.** The reader thread reads the shown map's marker flags every 500 ms and at once
+  after a map change. The first reading of a flag only records it; a later change is a flip.
+- **Known-answer flag ids** (bonfire lit, boss defeated) are not stored in the code: the bonfire
+  flag comes from the map data, and others are passed to `--probe --flag`.
+
+### Part C
+
+- **Overlay = a WPF layered window** with click-through, no-activate and tool-window style,
+  placed in screen pixels with `SetWindowPos`. It is hidden unless the game window is the
+  foreground window (or the tracker's own settings window is).
+- **Only the panel is redrawn, and only when something changed.** The overlay element occupies
+  just the minimap (or full-map) rectangle, the map geometry is cut into 32 m tiles so the
+  minimap draws what it can see, and a frame is skipped when the picture would be the same.
+  The timer runs at 33 ms, which caps redraws at 30 a second.
+- **Default hotkeys**: F7 full map, Ctrl+PageUp / Ctrl+PageDown layers, F8 settings, F9 hide.
+  Chosen because, to my knowledge, the game's default keyboard layout uses letters, digits,
+  arrows, Shift, Ctrl, Alt, Tab, Esc and Space but no function keys and no Ctrl+Page keys; this
+  was not checked against the game's key-binding menu. F12 (launcher screenshot) is avoided.
+  A registered hotkey is consumed by Windows and does not reach the game.
+- **Layer keys only act while the full map is open**; the minimap always shows the player's layer.
+- **Controller chord** needs at least two buttons, is checked on the press (not while held), is
+  off by default, and reads all four controller slots.
+- **Settings** live in `%APPDATA%\LootGoblinsMap\settings.json`. Unknown or unusable values fall
+  back to their defaults one by one and are reported; the file never stops the tracker.
+- **Replay in overlay mode** covers the primary screen instead of the game window, so the
+  overlay and its hotkeys can be tried without the game.
+- **Labels.** The minimap names the nearest few visible markers (default 4); the full map names
+  as many as fit. A label that would cover another label is left out.
+
+### Process
+
+- **`CLAUDE.md` replaced** with one consolidated rules file, as the brief asked.
+- **The live probes ran first.** The game was up at the start, so the map id, flag and overlay
+  placement checks were done before most of the code existed, with a throwaway probe in `work/`
+  built on the shipped reader files. The final `--probe` has not run against the game.
+- **Replay script format** extended with `@map` and `@flag` lines; the old "x,y,z per line"
+  files still load.
+- **Committed locally in three steps on `phase3-full-map`; nothing pushed.**

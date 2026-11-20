@@ -92,8 +92,23 @@ public sealed class MapRenderer
 
     private readonly Dictionary<MapData, List<(Vector3 A, Vector3 B)>[]> _outlines = new();
     private MapTransform? _builtFor;
-    private Geometry[] _fills = Array.Empty<Geometry>();
-    private Geometry[] _edges = Array.Empty<Geometry>();
+
+    /// <summary>
+    /// A square piece of one layer in map-pixel space. The map is cut into tiles so that a view
+    /// showing a small part of it (the minimap) only has to draw the tiles it can see.
+    /// </summary>
+    private sealed class Tile
+    {
+        public Rect Bounds = Rect.Empty;
+        public StreamGeometry Fill = new() { FillRule = FillRule.Nonzero };
+        public StreamGeometry Edges = new();
+        public StreamGeometryContext? FillContext, EdgeContext;
+    }
+
+    /// <summary>Tile edge in map pixels: 32 m at the default 6 pixels per metre.</summary>
+    private const double TileSize = 192;
+
+    private Tile[][] _tiles = Array.Empty<Tile[]>();
 
     private List<(Vector3 A, Vector3 B)>[] OutlinesOf(MapData map)
     {
@@ -114,47 +129,70 @@ public sealed class MapRenderer
         if (ReferenceEquals(t, _builtFor))
             return;
 
-        var fills = new StreamGeometry[map.LayerCount];
-        var contexts = new StreamGeometryContext[map.LayerCount];
-        for (int i = 0; i < fills.Length; i++)
+        var tiles = new Dictionary<(int, int), Tile>[map.LayerCount];
+        for (int i = 0; i < tiles.Length; i++)
+            tiles[i] = new Dictionary<(int, int), Tile>();
+
+        Tile TileAt(int layer, double x, double y)
         {
-            fills[i] = new StreamGeometry { FillRule = FillRule.Nonzero };
-            contexts[i] = fills[i].Open();
+            var key = ((int)Math.Floor(x / TileSize), (int)Math.Floor(y / TileSize));
+            if (!tiles[layer].TryGetValue(key, out var tile))
+            {
+                tiles[layer][key] = tile = new Tile();
+                tile.FillContext = tile.Fill.Open();
+                tile.EdgeContext = tile.Edges.Open();
+            }
+            return tile;
         }
+
+        var points = new List<Point>(8);
         foreach (var poly in map.Polygons)
         {
-            var ctx = contexts[poly.Layer];
-            var (x0, y0) = t.ToPixel(poly.Vertices[0]);
-            ctx.BeginFigure(new Point(x0, y0), isFilled: true, isClosed: true);
-            for (int v = 1; v < poly.Vertices.Length; v++)
+            points.Clear();
+            double cx = 0, cy = 0;
+            foreach (var v in poly.Vertices)
             {
-                var (x, y) = t.ToPixel(poly.Vertices[v]);
-                ctx.LineTo(new Point(x, y), isStroked: false, isSmoothJoin: false);
+                var (x, y) = t.ToPixel(v);
+                points.Add(new Point(x, y));
+                cx += x;
+                cy += y;
             }
+            // A polygon goes into the tile its centre is in; the tile's bounds grow to hold all of it.
+            var tile = TileAt(poly.Layer, cx / points.Count, cy / points.Count);
+            tile.FillContext!.BeginFigure(points[0], isFilled: true, isClosed: true);
+            for (int v = 1; v < points.Count; v++)
+                tile.FillContext.LineTo(points[v], isStroked: false, isSmoothJoin: false);
+            foreach (var p in points)
+                tile.Bounds.Union(p);
         }
+
         var outlineWorld = OutlinesOf(map);
-        var edges = new StreamGeometry[map.LayerCount];
-        for (int i = 0; i < fills.Length; i++)
+        for (int layer = 0; layer < map.LayerCount; layer++)
         {
-            contexts[i].Close();
-            fills[i].Freeze();
-
-            edges[i] = new StreamGeometry();
-            using (var ctx = edges[i].Open())
+            foreach (var (a, b) in outlineWorld[layer])
             {
-                foreach (var (a, b) in outlineWorld[i])
-                {
-                    var (ax, ay) = t.ToPixel(a);
-                    var (bx, by) = t.ToPixel(b);
-                    ctx.BeginFigure(new Point(ax, ay), isFilled: false, isClosed: false);
-                    ctx.LineTo(new Point(bx, by), isStroked: true, isSmoothJoin: false);
-                }
+                var (ax, ay) = t.ToPixel(a);
+                var (bx, by) = t.ToPixel(b);
+                var tile = TileAt(layer, (ax + bx) / 2, (ay + by) / 2);
+                tile.EdgeContext!.BeginFigure(new Point(ax, ay), isFilled: false, isClosed: false);
+                tile.EdgeContext.LineTo(new Point(bx, by), isStroked: true, isSmoothJoin: false);
+                tile.Bounds.Union(new Point(ax, ay));
+                tile.Bounds.Union(new Point(bx, by));
             }
-            edges[i].Freeze();
         }
 
-        _fills = fills;
-        _edges = edges;
+        _tiles = new Tile[map.LayerCount][];
+        for (int layer = 0; layer < map.LayerCount; layer++)
+        {
+            foreach (var tile in tiles[layer].Values)
+            {
+                tile.FillContext!.Close();
+                tile.EdgeContext!.Close();
+                tile.Fill.Freeze();
+                tile.Edges.Freeze();
+            }
+            _tiles[layer] = tiles[layer].Values.ToArray();
+        }
         _builtFor = t;
     }
 
@@ -216,23 +254,41 @@ public sealed class MapRenderer
         Matrix m = ComputeView(size, view, t, frame);
         double scale = m.M11;
         int playerLayer = frame.State == TrackState.Tracking ? frame.Layer : session.LastLayer;
-        int current = style.ShownLayer is { } forced && forced >= 0 && forced < _fills.Length ? forced : playerLayer;
+        int current = style.ShownLayer is { } forced && forced >= 0 && forced < _tiles.Length ? forced : playerLayer;
 
         // Map layers, in map-pixel space under the view matrix. The dimmed ones go first and the
         // shown one is painted on top.
+        // Only the tiles the panel can see are drawn.
+        var toMap = m;
+        toMap.Invert();
+        var seen = Rect.Transform(bounds, toMap);
+        seen.Inflate(4, 4);
+
         dc.PushTransform(new MatrixTransform(m));
         var dimPen = FrozenPen(OutlineDim, 1.0 / scale);
-        for (int i = 0; i < _fills.Length; i++)
+        var dimFill = current < 0 ? FloorNeutral : FloorDim;
+        for (int i = 0; i < _tiles.Length; i++)
         {
             if (i == current)
                 continue;
-            dc.DrawGeometry(current < 0 ? FloorNeutral : FloorDim, null, _fills[i]);
-            dc.DrawGeometry(null, dimPen, _edges[i]);
+            foreach (var tile in _tiles[i])
+            {
+                if (!tile.Bounds.IntersectsWith(seen))
+                    continue;
+                dc.DrawGeometry(dimFill, null, tile.Fill);
+                dc.DrawGeometry(null, dimPen, tile.Edges);
+            }
         }
-        if (current >= 0 && current < _fills.Length)
+        if (current >= 0 && current < _tiles.Length)
         {
-            dc.DrawGeometry(FloorFull, null, _fills[current]);
-            dc.DrawGeometry(null, FrozenPen(OutlineFull, 1.4 / scale), _edges[current]);
+            var fullPen = FrozenPen(OutlineFull, 1.4 / scale);
+            foreach (var tile in _tiles[current])
+            {
+                if (!tile.Bounds.IntersectsWith(seen))
+                    continue;
+                dc.DrawGeometry(FloorFull, null, tile.Fill);
+                dc.DrawGeometry(null, fullPen, tile.Edges);
+            }
         }
         dc.Pop();
 

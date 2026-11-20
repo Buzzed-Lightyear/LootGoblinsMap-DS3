@@ -140,7 +140,6 @@ internal sealed class OverlayController
                 _enabled = !_enabled;
                 break;
         }
-        _view.InvalidateVisual();
     }
 
     private void OpenSettings()
@@ -189,8 +188,10 @@ internal sealed class OverlayController
         _window.SetShown(visible && _enabled);
         if (visible && _enabled)
         {
-            _view.InvalidateVisual();
-            Frames++;
+            // The window covers the whole game picture; the view only occupies, and only redraws, its panel.
+            _view.PlaceIn(_window.ActualWidth, _window.ActualHeight);
+            if (_view.RedrawIfChanged())
+                Frames++;
         }
     }
 

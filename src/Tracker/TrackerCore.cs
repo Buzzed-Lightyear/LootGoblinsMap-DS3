@@ -59,9 +59,13 @@ internal sealed class TrackerCore : IDisposable
     public static string DefaultSettingsPath() =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "LootGoblinsMap", "settings.json");
 
+    /// <summary>Goes up each time the settings are replaced, so views know to redraw.</summary>
+    public int SettingsVersion { get; private set; }
+
     public void ReplaceSettings(TrackerSettings settings)
     {
         Settings = settings;
+        SettingsVersion++;
         try
         {
             settings.Save(SettingsPath);

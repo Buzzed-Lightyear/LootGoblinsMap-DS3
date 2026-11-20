@@ -1,104 +1,139 @@
-# Testing the tracker in the game (High Wall of Lothric)
+# Testing the loot map in the game
 
 The tracker only reads. It never starts, stops, focuses or sends input to the game, and it
-refuses to run as administrator.
+refuses to run as administrator. Your in-game test is just playing; the tracker writes what it
+sees to `work\live_checks.log`, which is what I need back.
 
 ## Before you start
 
-1. **Steam must not be running as administrator.** On 2026-11-20 Steam was elevated, so the game
-   was too, and Windows refused the tracker's read-only open ("access denied"). Quit the game and
-   Steam, then start Steam normally: no "Run as administrator", and no "Run this program as an
-   administrator" tick under Properties → Compatibility on `steam.exe` or `DarkSoulsIII.exe`.
-2. The map data must exist in `out\m30_00_00_00\` (`map.json`, `navpolys.bin`). It is there on
-   this machine. To regenerate it, run `.\build-map.cmd` from the repository folder. It reads the
-   game archives in place and writes only to `out\` and `work\`.
-3. The .NET 10 SDK is in `deps\dotnet\` (not installed system-wide). The two `.cmd` scripts find
-   it on their own. If `deps\` is ever deleted, install the .NET 10 SDK and they will use that.
+1. **Steam must not be running as administrator.** An elevated game cannot be read by an
+   unelevated tracker ("access denied"). Start Steam normally: no "Run as administrator", and no
+   "Run this program as an administrator" tick on `steam.exe` or `DarkSoulsIII.exe`.
+2. **Use borderless or windowed mode.** The overlay is an ordinary window on top of the game. It
+   **cannot appear over exclusive fullscreen**: Windows does not let another window draw there.
+3. The maps must exist in `out\` (20 map folders and `index.json`). They are there on this
+   machine. To rebuild them, run `.\build-map.cmd`; it reads the game archives in place and
+   writes only to `out\` and `work\`. It takes about 20 seconds.
+4. The .NET 10 SDK is in `deps\dotnet\`. The `.cmd` scripts find it on their own.
 
 ## Steps
 
-1. **Start the game yourself**, in borderless or windowed mode, and load a character at the
-   **High Wall of Lothric** bonfire. Then start the tracker from a normal, non-elevated prompt
-   or by double-clicking:
+1. **Start the game yourself**, borderless or windowed and not elevated, and load your character.
+   Then, from a normal (non-elevated) prompt in the repository folder:
 
    ```
-   .\run-tracker.cmd
+   .\run-tracker.cmd --overlay
    ```
 
-   The first start compiles the tracker and takes a little longer. Put the tracker window next
-   to the game, or tick **Always on top**.
+   A console window stays open; it shows the hotkeys and any problem (for example a hotkey
+   another program already uses). Close it, or press Ctrl+C in it, to stop the tracker.
 
-2. **Confirm it is attached and on a bonfire.**
-   - The readout on the right says `status   attached (PID …)` and shows a `version`.
-   - `world` shows three numbers that hold still while you stand still.
-   - The red dot sits on an orange bonfire circle (the circle stays visible around the dot), and
-     `polygon` says `inside, 0.0x m`.
-   - Write down the `world` x / y / z you see at the bonfire. This is the check that the game's
-     coordinates and the map's coordinates are the same space. Done once on 2026-11-20:
-     (−18.6, 41.23, −14.44), 0.73 m from the bonfire marker.
+2. **The minimap appears over the game**, top right, a second or two after the tracker has
+   attached. Check that:
+   - the mouse and the camera behave exactly as without it (clicks go through the minimap);
+   - the game keeps the keyboard focus;
+   - alt-tabbing away hides the minimap, and coming back shows it again;
+   - the name at the top of the minimap is the area you are in.
 
-   If the dot is on the map but not on a bonfire marker, or the message says you are outside High
-   Wall while you are standing at the bonfire, stop here and send me the `world` numbers.
+3. **Pick up one item on High Wall.** Its marker disappears within about two seconds. Items you
+   already have are not shown at all. (Settings → "Show collected items dimmed" brings them back
+   faintly, if you want to see what you have done.)
 
-3. **Check the orientation.** Walk forward a few steps, then turn right and keep walking.
-   - The blue trail must bend **clockwise**.
-   - If it bends anticlockwise the map is mirrored: tick **Flip X** (or **Flip Z**; either one
-     un-mirrors it, they differ by a half turn), check again, then press
-     **Save orientation to config.json**.
-   - If the map is the right way round but you would like north (or the way you are facing)
-     elsewhere, use **Rotate 90°** and save. Rotation never mirrors.
-   - Map, markers, dot and trail turn together; nothing should be left behind when you toggle.
-   - After saving, `.\build-map.cmd` redraws the PNG/SVG images in `out\` the same way round. The
-     tracker itself does not need that.
+4. **Warp to one bonfire in each area.** After the loading screen the map switches to the new
+   area and the red dot sits on a bonfire marker. Stay seated for two seconds so the visit is
+   logged. Areas with a map: every area with a bonfire, including the three DLC areas if you can
+   reach them. Nothing needs writing down; the log records each visit with its distance.
 
-4. **Walk to Tower on the Wall**, using at least one staircase and one ladder on the way. Note:
-   - whether the bright (highlighted) floor changes when you change floors, and whether it is
-     the floor you are actually on. `layer` in the readout is the number of the bright one;
-   - any place where the dot leaves the map, the message "outside High Wall of Lothric" appears,
-     or `polygon` shows `nearest` or a distance of more than about a metre for long;
-   - whether the dot ends on a bonfire circle again at Tower on the Wall.
+5. **Try the keys.**
 
-## What the window shows
+   | Key | What it does |
+   |---|---|
+   | F7 | Full map: a large centred map of the current area with every item not yet collected, a legend and a count of what is left. F7 again closes it. |
+   | Ctrl+PageUp / Ctrl+PageDown | While the full map is open: show the layer above / below. |
+   | F8 | Settings window: category filters, collected items, minimap corner, size, opacity and zoom, hotkeys, controller chord. "Apply and save" takes effect at once. |
+   | F9 | Hide or show the overlay. |
 
-- **Bright floor**: the layer you are on. **Dim floor**: all other layers. A connected floor
-  stays on one layer, small steps included, and the layer changes on stairs and ladders, at the
-  top, the bottom or part-way up. Several floors that do not lie over each other share a layer,
-  so other rooms light up together with yours. If the bright floor changes while you walk on the
-  level, note where: that is a bug to report. After `.\build-map.cmd`, restart the tracker to
-  load the new layers.
-- **Orange circle**: bonfire. **Yellow diamond**: treasure. Markers on other layers are faded.
-- **Red dot**: you. **Blue line**: the trail. **Clear trail** empties it.
-- **Follow player** keeps you centred. **Fit map to window** shows everything. The mouse wheel
-  or the slider zooms. Dragging the map looks around and turns follow off.
-- Messages appear over the map when the game is not running, when no character is loaded, when
-  you are outside High Wall, or when access is denied. Each clears by itself when the cause goes.
+   The settings window is an ordinary window, so the game loses the focus while it is open;
+   click the game to go on playing.
 
-## Quick checks without the window
+6. **Send back `work\live_checks.log`.**
 
-Run these from the repository folder (they use the same code as the window):
+## Limits you should know about
+
+- **Not over exclusive fullscreen.** Use borderless or windowed.
+- **The full map does not pause or block the game.** While it is open the game still receives
+  everything you press and every stick movement. Open it somewhere safe.
+- **Hotkeys are taken away from the game while the tracker runs.** F7, F8, F9 and
+  Ctrl+PageUp / Ctrl+PageDown never reach the game (or any other program) until the tracker is
+  closed. The defaults are keys the game does not use; change them in the settings if they clash
+  with something else.
+- **The controller chord is off by default**, because the game receives the same buttons and
+  does whatever it normally does with them. It is there for people who have those buttons free.
+- **A map is per area.** Where two areas meet, the game decides which one you are in, and the
+  map follows it.
+- **A few items are not shown**: ones that stand where there is no walkable floor in the game's
+  navigation data (6 of 857), and everything that is not a "treasure" in the map files: enemy
+  drops, shop and quest items, NPC gifts.
+- **Bosses are not shown** (the stretch goal was not done).
+
+## What the overlay shows
+
+- **Bright floor**: the layer you are on. **Dim floor**: the other layers. A connected floor
+  stays on one layer; it changes on stairs and ladders.
+- **Diamonds**: items, coloured by category (the full map has the legend). Collected ones are
+  hidden. **Orange circles**: bonfires, with their names. **Red dot**: you. **Blue line**: your trail.
+- The minimap names the few items nearest to you; the full map names as many as fit without
+  covering each other.
+- A short message replaces the map when the game is not running, no character is loaded, access
+  is denied, or you are in an area without a map. Each clears by itself.
+
+## The debug window
+
+`.\run-tracker.cmd` without `--overlay` opens the phase 2 window: a normal window with the map,
+orientation controls and a readout (attach status, game version, map id and how it was chosen,
+world and pixel position, layer, distance to the navmesh, items left). Use it when something
+looks wrong in the overlay.
+
+## Checks without playing
+
+Run from the repository folder; they use the same code as the overlay.
 
 ```
 .\run-tracker.cmd --probe --seconds 5
 ```
 
-Attaches, samples the position for five seconds and prints it with the distance to every
-bonfire marker. With the character at a bonfire, expect `RESULT: OK` and
-`nearest bonfire marker: … within 3 m`. Exit code 2 means the game is not running, 3 means
-access denied.
+Attaches, then prints the position, the map id the game reports, the nearest bonfire and its
+lit flag, and whether the flag readings were stable. Exit code 2: game not running; 3: access denied.
 
 ```
-.\run-tracker.cmd --make-path work\replay_path.txt
-.\run-tracker.cmd --replay work\replay_path.txt
-.\run-tracker.cmd --replay work\replay_path.txt --png work\replay.png
+.\run-tracker.cmd --overlay-check
 ```
 
-The first writes a synthetic walk between two bonfires, the second plays it in the window
-without the game, the third saves the final view as a picture.
+Puts an empty overlay over the game and prints both rectangles; they must be equal.
+
+```
+.\run-tracker.cmd --make-path work\walk.txt --from-map m30_00_00_00 --to-map m30_01_00_00
+.\run-tracker.cmd --overlay --replay work\walk.txt
+.\run-tracker.cmd --replay work\walk.txt --png work\full.png --view full
+```
+
+The first writes a synthetic walk that crosses from one area into the next and "picks up" a few
+items; the second plays it in the overlay over your desktop, without the game (the hotkeys work);
+the third saves the full-map view as a picture (`--view minimap` for the minimap).
+
+## Settings and log files
+
+- Settings: `%APPDATA%\LootGoblinsMap\settings.json` (per user, not in the repository). Delete it
+  to go back to the defaults. A value the tracker cannot use falls back to its default and is
+  reported in the console.
+- Test log: `work\live_checks.log`, one line per event:
+  - `bonfire`: you came to rest within 1.5 m of a bonfire marker (map id, area, bonfire, distance);
+  - `flag`: a tracked flag flipped, that is, an item was picked up or a bonfire lit (map id, name);
+  - `map`: the map switched (from, to, and how it was detected).
 
 ## What to send back
 
-- The `world` x / y / z at the High Wall bonfire and at Tower on the Wall.
-- Which way the trail bent in step 3, and the orientation you ended up saving.
-- Where the highlighted layer was wrong or the dot left the map in step 4 (a screenshot of the
-  tracker window is enough).
-- Anything the readout said that was not `attached`.
+- `work\live_checks.log`.
+- Anything from steps 2 to 5 that did not behave as described, with the area you were in. A
+  screenshot with the minimap or full map in it is enough.
+- Places where the bright floor changed while you walked on the level.

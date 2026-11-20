@@ -12,11 +12,19 @@ and their GPL headers.
 
 | File here | From upstream | Change |
 |---|---|---|
-| `DarkSouls3/DarkSouls3.cs` | `DarkSouls3/DarkSouls3.cs` | Reduced to the `playerIns` and `Loading` scans, `IsPlayerLoaded`, `IsLoading`, `GetPosition`, `GetVersion`. Patterns and offsets are unchanged. |
-| `Memory/Pointer.cs` | `Memory/Pointer.cs` | Reads go through `IMemorySource`; only `ReadInt32`, `ReadInt64`, `ReadFloat`, `GetAddress`, `IsNullPtr` kept; a failed read resolves to 0 instead of throwing. |
+| `DarkSouls3/DarkSouls3.cs` | `DarkSouls3/DarkSouls3.cs` | Reduced to the `playerIns`, `Loading`, `SprjEventFlagMan` and `FieldArea` scans, `IsPlayerLoaded`, `IsLoading`, `GetPosition`, `ReadEventFlag`, `GetVersion`. Patterns, offsets and the event-flag walk are unchanged, apart from one guard against a garbage count. Added locally: `TryGetMapId` (see below). |
+| `Memory/Pointer.cs` | `Memory/Pointer.cs` | Reads go through `IMemorySource`; kept: `ReadInt32`, `ReadUInt32`, `ReadInt64`, `ReadByte`, `ReadFloat`, `GetAddress`, `IsNullPtr`, `Append`, `Copy`, `CreatePointerFromAddress`; a failed read resolves to 0 instead of throwing. |
 | `Memory/TreeBuilder.cs` | `Memory/NodeType.cs`, `PointerNode.cs`, `PointerAppender.cs`, `TreeBuilder.cs` | Merged into one file; absolute scan dropped. |
 | `Memory/MemoryScanner.cs` | `Memory/MemoryScanner.cs` | Only relative-scan pointer resolution kept. The caller passes in the main module's base and bytes. Plain anchored pattern search instead of the upstream Boyer-Moore helper. |
 | `Memory/IMemorySource.cs` | — (local) | The one seam to a process: `bool TryRead(long address, Span<byte> buffer)`. It has no way to change anything. |
+
+## Not from SoulMemory: the current-map read
+
+`DarkSouls3.TryGetMapId` reads four bytes at PlayerIns + 0x1FE0. Upstream SoulMemory has no
+such read. The offset is the `Map (m??_??_??_??)` entry of the public Grand Archives cheat table
+(https://github.com/The-Grand-Archives/Dark-Souls-III-CT-TGA, commit
+`6f6a1e0f726f313b43814c6fa939cf60f9d8b05b`). That repository has no license file; only the
+offset was used, nothing was copied from it. Verified against game version 1.15.2.0.
 
 ## What was deliberately left out, and why
 
@@ -30,8 +38,8 @@ Upstream SoulMemory does not satisfy this project's hard rule 2 as it stands:
 
 None of those files or members are vendored. Left out entirely: `Native/`, `MemoryV2/`,
 `soulmods/`, `Parameters/`, `Memory/BitBlt.cs`, `Memory/Extensions.cs`, `Memory/IMemory.cs`,
-every other game's folder, and the DS3 attribute, event-flag, boss, bonfire and item-pickup
-code (not needed for a position tracker).
+every other game's folder, and the DS3 attribute code and the boss, bonfire and item-pickup
+tables (tables of game data; this project derives what it needs from the game files at build time).
 
 In their place the tracker has its own small process layer (`src/Tracker/Memory/`), which opens
 the game with the read and limited-query rights only and imports nothing that can change a

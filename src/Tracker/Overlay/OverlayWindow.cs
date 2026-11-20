@@ -42,11 +42,12 @@ internal sealed class OverlayWindow : Window
 
     protected override void OnSourceInitialized(EventArgs e)
     {
-        base.OnSourceInitialized(e);
         _own = NativeMethods.OwnWindow.Of(this);
         // Click-through, never active, no taskbar button.
         NativeMethods.AddExtendedStyle(_own, NativeMethods.WsExTransparent | NativeMethods.WsExNoActivate |
                                              NativeMethods.WsExToolWindow | NativeMethods.WsExLayered);
+        // Listeners (hotkey registration) run after the handle and its style are in place.
+        base.OnSourceInitialized(e);
     }
 
     /// <summary>The extended style bits actually on the window, for the self-check.</summary>

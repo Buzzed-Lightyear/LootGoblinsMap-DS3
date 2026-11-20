@@ -404,3 +404,176 @@ Checks rerun after the change:
   `out/` was regenerated; restart the tracker to load it.
 - The other open issues listed above (geometric "outside High Wall", stray navmesh pieces,
   unnamed bonfires, the unpushed identity fix) are unchanged.
+
+---
+
+# Phase 3 — all areas, item names and pickup state, overlay
+
+Date: 2026-11-20. Branch `phase3-full-map`, committed locally, not pushed.
+
+## Result in one paragraph
+
+All 20 maps that have a navmesh are built, the three DLC areas among them (the DLC archives
+were downloaded just before this phase and read without any change to the code). Treasures have
+their names, categories and pickup flags from the game's own params and text; bonfires and
+areas have their names. The tracker picks the map from the game's own map id, hides items as
+their flags flip, and has an overlay mode with a corner minimap, a full-map view, global
+hotkeys and a settings window. The memory side was verified against the running game (map id,
+flags, position, overlay placement). What nobody has done yet is play with it: picking up an
+item, warping between areas and using the hotkeys in the game are the owner's test.
+The stretch goal (bosses) was not done.
+
+## What was built
+
+- **Builder.** `mapbuilder all` probes the archives for map files, builds every map with a
+  navmesh into `out/<map>/`, runs the acceptance checks per map, and writes `out/index.json`
+  and `out/build_report.md`. It reads the regulation (`Data0.bdt`, AES-CBC, in place) and the
+  message archives of one language, and resolves each treasure's item lots into names,
+  categories, counts and a pickup flag; bonfires get their name and lit flag from the bonfire
+  table; areas get their name from the place-name text.
+- **Tracker.** Multi-map session that follows the game's map id (PlayerIns + 0x1FE0); event
+  flags through SoulMemory's flag walk; `work/live_checks.log`; replay scripts with map ids and
+  flag changes.
+- **Overlay.** `run-tracker.cmd --overlay`: a borderless, transparent, topmost, click-through,
+  never-activating window placed exactly over the game's client area, hidden when the game is
+  minimized or not in the foreground. Minimap or full map, labels, legend, layer stepping,
+  hotkeys, optional controller chord, settings window, per-user settings file.
+
+## Per-map table
+
+Area names are left out here on purpose (no game text in git); `out/build_report.md` has the
+same table with names.
+
+| Map | From | Polygons | Layers | Size (m) | Bonfires placed / listed | Treasures | Unused events | Markers within 2 m | Checks |
+|---|---|---|---|---|---|---|---|---|---|
+| m30_00_00_00 | Data5 | 13672 (49 stray) | 7 | 254 × 576 | 5 / 8 | 60 | 11 | 62/66 | pass |
+| m30_01_00_00 | Data5 | 4883 (2 stray) | 6 | 230 × 199 | 3 / 3 | 51 | 2 | 54/54 | pass |
+| m31_00_00_00 | Data5 | 27142 | 7 | 260 × 528 | 5 / 5 | 74 | 13 | 76/79 | pass |
+| m32_00_00_00 | Data5 | 23267 | 8 | 339 × 496 | 4 / 4 | 39 | 0 | 43/43 | pass |
+| m33_00_00_00 | Data5 | 46755 (346 stray) | 8 | 575 × 499 | 9 / 9 | 91 | 9 | 100/100 | pass |
+| m34_01_00_00 | Data5 | 8172 (1 stray) | 10 | 354 × 264 | 2 / 2 | 45 | 11 | 46/47 | pass |
+| m35_00_00_00 | Data5 | 10732 | 8 | 417 × 302 | 4 / 4 | 52 | 25 | 56/56 | pass |
+| m37_00_00_00 | Data5 | 21358 | 11 | 584 × 539 | 9 / 9 | 83 | 0 | 91/92 | pass |
+| m38_00_00_00 | Data5 | 41765 (80 stray) | 8 | 1247 × 1172 | 6 / 6 | 63 | 15 | 69/69 | pass |
+| m39_00_00_00 | Data5 | 18638 | 6 | 233 × 427 | 3 / 3 | 62 | 11 | 64/65 | pass |
+| m40_00_00_00 | Data5 | 16041 (10 stray) | 10 | 435 × 251 | 4 / 5 | 35 | 6 | 36/39 | pass |
+| m41_00_00_00 | Data5 | 7246 | 4 | 171 × 480 | 4 / 3 | 0 | 0 | 4/4 | pass |
+| m45_00_00_00 | DLC1 | 31705 | 11 | 525 × 564 | 9 / 8 | 66 | 4 | 75/75 | pass |
+| m46_00_00_00 | Data5 | 2376 | 6 | 73 × 73 | 0 / 0 | 0 | 0 | 0/0 | pass |
+| m47_00_00_00 | DLC1 | 2389 | 3 | 53 × 58 | 0 / 0 | 0 | 0 | 0/0 | pass |
+| m50_00_00_00 | DLC2 | 25109 | 9 | 445 × 394 | 4 / 4 | 52 | 0 | 55/56 | pass |
+| m51_00_00_00 | DLC2 | 21222 | 9 | 388 × 332 | 6 / 6 | 84 | 0 | 90/90 | pass |
+| m51_01_00_00 | DLC2 | 7740 | 2 | 379 × 401 | 2 / 2 | 0 | 0 | 2/2 | pass |
+| m53_00_00_00 | Data5 | 2589 | 4 | 160 × 160 | 0 / 0 | 0 | 0 | 0/0 | pass |
+| m54_00_00_00 | Data5 | 9525 | 1 | 500 × 500 | 0 / 0 | 0 | 0 | 0/0 | pass |
+
+Sixteen more map files exist in the archives without a navmesh and are not built: m30_02,
+m31_01 … m31_09, m31_90, m32_90, m33_01, m34_00, m36_00, m36_90.
+
+Totals: 857 treasures, all with resolved names, 856 with a pickup flag, 983 items; 851 placed
+on a layer; 79 bonfire markers placed, 77 named.
+
+Notes on the table:
+
+- **Two maps failed the markers check on the first run** (m31_00 at 82 %, m34_01 at 81 %). The
+  cause was 107 treasure events across all maps whose item lot does not exist in the regulation,
+  most of them parked on one off-map point per map. They cannot be picked up; they are now
+  flagged as unused, kept in `map.json` for the record, never shown, and not counted. With them
+  set aside every map passes. They are listed in each map's `acceptance.txt`.
+- **Bonfires placed versus listed** differ where the game's table lists entries that have no
+  bonfire object on the walkable map, or the map has a bonfire object the table does not list
+  (3 such objects, unnamed).
+- **The navmesh check's floor was lowered** from 500 polygons to 20 and from 50 m to 10 m so
+  that the small arena maps are judged as maps, not as failures.
+- **Stray polygons** are pieces far from the main body; they are in the polygon file but no
+  longer stretch the image (High Wall went from 431 × 644 m to 254 × 576 m).
+- **Three treasures are shown on a neighbouring map**: they are defined in one map's file but
+  stand on the next map's floor.
+
+## Do maps share space?
+
+Yes. Taking each map's navmesh in its own coordinates, **25 of the 190 map pairs** have polygons
+that overlap in top-down view within 3 m of height (the full table is in
+`out/build_report.md`). Adjacent areas touch at their joins, as expected for one continuous
+world, but several unrelated maps also coincide, mostly the arena maps and the DLC maps with
+base-game areas (up to 21.5 % of one map's polygons). So **position alone cannot identify the
+map.** The shipped method is the game's own map id read from memory; position is only a
+fallback for when no id can be read and exactly one map fits.
+
+## Checks
+
+1. **Game folder snapshot — PASS under the phase 3 rule.** 203 files before and after (the DLC
+   download had added 17 since phase 2: four archive files and thirteen sound files). Outside
+   the eleven files the running game's mods rewrite, the two snapshots are identical: 192 files
+   compared, 0 differences. The eleven excluded files did all change, because the owner
+   launched the game during the session. Files: `work/game_before_3.txt`, `work/game_after_3.txt`.
+2. **`dotnet build` and `dotnet test` from a clean checkout — PASS.** 145 source files copied
+   to an empty folder (no `bin/`, `obj/`, `out/`, `work/`, `deps/`): 0 errors, 92/92 tests
+   (75 in `MapBuilder.Tests`, 17 in `Tracker.Tests`).
+3. **Per-map acceptance table — PASS**, above; the two first-run failures are explained.
+4. **Overlap analysis — done**, above: 25 overlapping pairs.
+5. **Read-only scan — PASS.** The diff of `ReadOnlyGuaranteeTests.cs` since phase 2 is 16 added
+   lines in the allow-list and nothing removed; the banned list is untouched and still finds
+   nothing in the tracker or the shared library, in source or compiled.
+6. **Unit tests on synthetic data — PASS.** `GameDataTests` (param parsing, text parsing with
+   DLC merging, lot resolution including chained and multi-slot lots, categories, unused
+   events, names, stray pieces, overlap) and `TrackerLogicTests` (map switching by id, unbuilt
+   map, position fallback, a flag flip hiding a marker, filters, the bonfire-rest log, replay
+   scripts, overlay placement from window rectangles, minimap and full-map rectangles, hotkey,
+   chord and settings parsing, settings round trip, index loading). Event-flag and map-id reads
+   are tested against a fake process image in `MemoryReaderTests`.
+7. **Replay — PASS.** A synthetic walk from a bonfire in m30_00 across the place where it meets
+   m30_01 to a bonfire there, with two flags set from the start and six turning on along the way.
+   The map switched once, by map id; the log got four flag lines, the map line and a bonfire
+   line. Minimap and full map were rendered to PNG and opened: labels are readable and do not
+   cover each other, the three items "picked up" in the second map are gone and the legend
+   counts dropped to match (48 of 51 left), the title and bonfire names are the second area's.
+   The debug window and the settings window were captured and looked at as well.
+8. **Live checks — PASS, with one qualification.** Run against the game (version 1.15.2.0, not
+   elevated, character at the High Wall bonfire):
+   - map id read from memory: `m30_00_00_00`; the value occurs exactly once in the player
+     structure, at the offset used;
+   - lit flag of the bonfire the character sat at: true; Iudex Gundyr defeated flag: true; the
+     flags of three bosses not yet beaten: false;
+   - 46 rounds of 14 flags over 5.0 s: no reading changed; the map id did not change;
+   - position 0.72 m from the bonfire marker 3001950, spread 0.0000 m over 65 samples;
+   - overlay window rectangle equal to the game's client rectangle (3440 × 1440 at 0, 0);
+     click-through and no-activate set; the foreground window was the same before and after.
+   Qualification: the map id and flag reads were made with a throwaway probe built on the same
+   reader code that ships, early in the session; the final `Tracker --probe`, which adds the
+   comparison with the map data, was finished after the game had been closed and has not run
+   against it. The overlay check was run with the shipped command. The overlay was not in the
+   foreground at that moment (the editor was), so "visible over the game" is not confirmed.
+9. **No game text in git — PASS.** Twenty names drawn at random from the 499 distinct item and
+   bonfire names in `out/` were searched for in all 145 tracked files: none found.
+
+**Overlay cost** on a 19-second replay over a 3440 × 1440 screen, 20-thread machine: about a
+quarter of one core while the player moves (29 % of one core including start-up, 1.5 % of the
+machine), about 4 % of one core standing still, 180 MB working set (290 MB peak while loading).
+Redraws are capped at 30 a second and measured at about 20; nothing is redrawn while nothing
+changes. Getting there took two changes: the first version redrew the whole map each frame at
+68 % of a core.
+
+## Not verified without the owner
+
+- That an item picked up in the game makes its marker disappear, and how quickly.
+- That the map switches when warping, in every area; that the dot lands on the bonfire marker.
+- That the overlay is visible over the game in borderless mode and stays out of the way of the
+  mouse and the focus while playing.
+- The hotkeys while the game has the focus, and the controller chord with a real controller.
+- The DLC maps at run time (they are built and pass the checks; nobody has stood in them).
+- Item names against what the game shows. They come from the game's own text by id, but no
+  pickup has been compared.
+
+## Open issues
+
+- **Bosses (stretch goal) are not done.** Bonfire names of boss rooms are present because the
+  game names those bonfires after the boss.
+- 6 real treasures stand where no navmesh polygon is within reach and are not shown.
+- The first lot's flag is used for a treasure. One treasure has no flag and can never be hidden.
+- Area names are one per map; sub-areas inside a map (the game shows several place names within
+  some maps) are not distinguished.
+- The item categories are coarse: shields, ammunition and catalysts are all "weapons".
+- English text only; the language is a config value (`language`), untested for others.
+- The full map does not block game input and the overlay cannot show over exclusive fullscreen.
+- Position-only map choice (used when no map id can be read) is ambiguous for 25 map pairs.

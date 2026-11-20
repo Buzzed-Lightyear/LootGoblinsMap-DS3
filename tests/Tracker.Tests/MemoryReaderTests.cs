@@ -129,7 +129,7 @@ public class MemoryReaderTests
     [TestMethod]
     public void ResolvesPointers_AndReadsThePlantedPosition()
     {
-        var expected = new Vector3(-19.244f, 41.207f, -14.783f);
+        var expected = new Vector3(12.5f, 3.25f, -40.75f);
         byte[] image = BuildImage(expected, playerLoaded: true);
         var memory = new FakeMemory(Base, image);
         var ds3 = new DarkSouls3();
