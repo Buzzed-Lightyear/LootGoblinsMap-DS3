@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Loot Goblins Map: a loot map overlay for Dark Souls III</title>
+<meta name="description" content="An unofficial, read-only loot map for Dark Souls III. A minimap and a full map over the game, showing the items you have not picked up yet.">
+<!-- One static page. No scripts, no build step, and nothing loaded from another site. -->
+<style>
+  @font-face {
+    font-family: "EB Garamond";
+    src: url("fonts/EBGaramond-Medium.ttf") format("truetype");
+    font-weight: 500;
+    font-display: swap;
+  }
+
+  :root {
+    --table: #17130e;      /* the dark table the map lies on */
+    --table-lit: #221c14;
+    --paper: #cbb789;      /* the map's paper */
+    --cream: #f0e5c6;      /* the floor wash, and the lettering here */
+    --dim: #b3a37f;
+    --ink: #2b2118;
+    --ember: #e0792b;      /* the bonfire */
+    --rule: #4a3d2b;
+    --measure: 34rem;
+  }
+
+  * { box-sizing: border-box; }
+
+  html { background: var(--table); }
+
+  body {
+    margin: 0;
+    color: var(--cream);
+    background:
+      radial-gradient(120rem 60rem at 70% -10rem, var(--table-lit), transparent 60%),
+      var(--table);
+    font-family: "EB Garamond", Georgia, "Times New Roman", serif;
+    font-weight: 500;
+    font-synthesis: none;
+    font-size: 1.25rem;
+    line-height: 1.6;
+    text-rendering: optimizeLegibility;
+  }
+
+  main, header, footer { padding: 0 1.5rem; }
+  .column { max-width: 72rem; margin: 0 auto; }
+  .text { max-width: var(--measure); }
+
+  a { color: var(--cream); text-decoration-color: var(--ember); text-decoration-thickness: 0.09em; text-underline-offset: 0.18em; }
+  a:hover { color: #fff; }
+  a:focus-visible, .download:focus-visible { outline: 2px solid var(--ember); outline-offset: 4px; border-radius: 2px; }
+
+  h1, h2, h3 { font-weight: 500; line-height: 1.1; margin: 0; }
+  p { margin: 0 0 1.1em; }
+
+  /* ---- opening ---- */
+  header .column { padding: 4.5rem 0 2.5rem; }
+  h1 {
+    font-size: clamp(3.2rem, 9vw, 7.2rem);
+    letter-spacing: -0.02em;
+    max-width: 11ch;
+  }
+  .says {
+    font-size: clamp(1.35rem, 2.4vw, 1.75rem);
+    line-height: 1.4;
+    max-width: 30rem;
+    margin: 1.6rem 0 2rem;
+    color: var(--cream);
+  }
+  .download {
+    display: inline-block;
+    background: var(--cream);
+    color: var(--ink);
+    text-decoration: none;
+    font-size: 1.3rem;
+    padding: 0.7rem 1.5rem 0.8rem;
+    border-radius: 3px;
+  }
+  .download:hover { background: #fff; color: var(--ink); }
+  .small { font-size: 1rem; color: var(--dim); margin-top: 0.9rem; max-width: 30rem; }
+
+  /* ---- the map on the table ---- */
+  .table { position: relative; margin: 1rem auto 0; max-width: 72rem; }
+  .table .sheet {
+    display: block; width: 100%; height: auto;
+    border-radius: 4px;
+    box-shadow: 0 2.5rem 5rem -1.5rem #000, 0 0 0 1px #0006;
+    transform: rotate(-0.6deg);
+  }
+  .table .disc {
+    position: absolute; right: 2.5%; top: -15%;
+    width: 24%; min-width: 9rem; height: auto;
+    border-radius: 50%;
+    clip-path: circle(45.6% at 50% 50%);
+    filter: drop-shadow(0 1rem 1.5rem #000c);
+  }
+  figcaption { font-size: 1rem; color: var(--dim); max-width: var(--measure); margin: 1.6rem 0 0; }
+
+  /* ---- sections ---- */
+  section { padding: 4.5rem 0 0; }
+  h2 { font-size: clamp(2rem, 4vw, 2.9rem); letter-spacing: -0.01em; margin-bottom: 1.2rem; max-width: 20ch; }
+
+  .legend { list-style: none; margin: 2rem 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(13.5rem, 1fr)); gap: 0.55rem 2rem; max-width: 60rem; }
+  .legend li { display: flex; align-items: center; gap: 0.8rem; }
+  .legend svg { width: 2rem; height: 2rem; flex: none; }
+
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 2.2rem; }
+  .pair figure { margin: 0; }
+  .pair img { display: block; width: 100%; height: auto; border-radius: 3px; box-shadow: 0 0 0 1px #0008; }
+  .pair figcaption { margin-top: 0.7rem; }
+
+  ol.steps { margin: 0; padding-left: 1.4em; max-width: var(--measure); }
+  ol.steps li { margin-bottom: 0.7em; padding-left: 0.3em; }
+  ol.steps li::marker { color: var(--ember); }
+
+  ul.plain { margin: 0; padding-left: 1.2em; max-width: var(--measure); }
+  ul.plain li { margin-bottom: 0.6em; }
+  ul.plain li::marker { color: var(--rule); }
+
+  table { border-collapse: collapse; width: 100%; max-width: var(--measure); }
+  th, td { text-align: left; padding: 0.55rem 0; border-bottom: 1px solid var(--rule); font-weight: 500; vertical-align: top; }
+  th { color: var(--dim); font-size: 1rem; }
+  td:first-child { white-space: nowrap; padding-right: 2rem; }
+  kbd {
+    font: inherit; font-size: 0.95em;
+    background: var(--cream); color: var(--ink);
+    padding: 0 0.4em 0.1em; border-radius: 3px;
+  }
+
+  footer .column { padding: 5rem 0 3.5rem; }
+  footer p { font-size: 1rem; color: var(--dim); max-width: 44rem; }
+  footer hr { border: 0; border-top: 1px solid var(--rule); margin: 0 0 2rem; }
+
+  @media (max-width: 44rem) {
+    body { font-size: 1.15rem; }
+    header .column { padding-top: 3rem; }
+    .table .disc { top: -9%; }
+    .table .sheet { transform: none; }
+    .pair { grid-template-columns: 1fr; }
+    section { padding-top: 3.2rem; }
+  }
+  @media (max-width: 26rem) {
+    td:first-child { white-space: normal; padding-right: 1rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="column">
+    <h1>Loot Goblins Map</h1>
+    <p class="says">A map for Dark Souls III that sits over the game and shows every item you have not picked up yet.</p>
+    <a class="download" href="https://github.com/Buzzed-Lightyear/LootGoblinsMap-DS3/releases">Download for Windows</a>
+    <p class="small">Free and open source. It only reads the game: it changes nothing and never goes online.</p>
+  </div>
+</header>
+
+<main>
+  <figure class="table" style="margin-top: 5rem">
+    <img class="sheet" src="images/full-map-parchment.png" width="1200" height="760"
+         alt="A map drawn like ink on parchment: the floor plan of a keep with a courtyard, a terrace above it and a round vault below, with named item markers, three bonfires and a red trail showing where the player walked.">
+    <img class="disc" src="images/minimap-parchment.png" width="380" height="380"
+         alt="The round minimap: the same courtyard close up, with the player as a red dot.">
+    <figcaption>The full map and the minimap, shown here on a made-up demo area that comes with the program. Nothing on this page is taken from the game.</figcaption>
+  </figure>
+
+  <div class="column">
+
+    <section>
+      <h2>What it puts on the map</h2>
+      <div class="text">
+        <p>Every item lying in the area, by name, until you pick it up. Then it disappears. Bonfires, the floor you are standing on, and the trail behind you.</p>
+        <p>Items come in eleven kinds. Switch off the ones you do not care about.</p>
+      </div>
+      <ul class="legend">
+        <li><svg viewBox="-1.5 -1.5 3 3" aria-hidden="true"><circle r="1.38" fill="#231b12" stroke="#f0c94a" stroke-width=".12"/><path transform="scale(.62)" fill="#f0c94a" fill-rule="evenodd" d="M -0.95,0 A 0.45,0.45 0 1 1 -0.05,0 A 0.45,0.45 0 1 1 -0.95,0 Z M -0.68,0 A 0.18,0.18 0 1 0 -0.32,0 A 0.18,0.18 0 1 0 -0.68,0 Z M -0.08,-0.12 L 0.95,-0.12 L 0.95,0.42 L 0.78,0.42 L 0.78,0.12 L 0.62,0.12 L 0.62,0.36 L 0.45,0.36 L 0.45,0.12 L -0.08,0.12 Z"/></svg>Key items</li>
+        <li><svg viewBox="-1.5 -1.5 3 3" aria-hidden="true"><circle r="1.38" fill="#231b12" stroke="#c79ae8" stroke-width=".12"/><path transform="scale(.62)" fill="#c79ae8" fill-rule="evenodd" d="M -0.8,0.15 A 0.8,0.8 0 1 1 0.8,0.15 A 0.8,0.8 0 1 1 -0.8,0.15 Z M -0.5,0.15 A 0.5,0.5 0 1 0 0.5,0.15 A 0.5,0.5 0 1 0 -0.5,0.15 Z M 0,-1 L 0.28,-0.7 L 0,-0.42 L -0.28,-0.7 Z"/></svg>Rings</li>
+        <li><svg viewBox="-1.5 -1.5 3 3" aria-hidden="true"><circle r="1.38" fill="#231b12" stroke="#e8694e" stroke-width=".12"/><path transform="scale(.62)" fill="#e8694e" d="M 0,-1 L 0.22,-0.74 L 0.22,0.22 L 0.66,0.22 L 0.66,0.48 L 0.16,0.48 L 0.16,0.8 L 0.24,0.9 L 0,1 L -0.24,0.9 L -0.16,0.8 L -0.16,0.48 L -0.66,0.48 L -0.66,0.22 L -0.22,0.22 L -0.22,-0.74 Z"/></svg>Weapons</li>
+        <li><svg viewBox="-1.5 -1.5 3 3" aria-hidden="true"><circle r="1.38" fill="#231b12" stroke="#e09a52" stroke-width=".12"/><path transform="scale(.62)" fill="#e09a52" d="M -0.78,-0.85 L 0.78,-0.85 L 0.78,0 C 0.78,0.6 0.3,0.9 0,1 C -0.3,0.9 -0.78,0.6 -0.78,0 Z"/></svg>Shields</li>
+        <li><svg viewBox="-1.5 -1.5 3 3" aria-hidden="true"><circle r="1.38" fill="#231b12" stroke="#72c9de" stroke-width=".12"/><path transform="scale(.62)" fill="#72c9de" d="M -0.85,0.82 L -0.67,1 L 0.32,-0.1 L 0.14,-0.28 Z M 0.1,-0.58 A 0.42,0.42 0 1 1 0.94,-0.58 A 0.42,0.42 0 1 1 0.1,-0.58 Z"/></svg>Catalysts</li>
+        <li><svg viewBox="-1.5 -1.5 3 3" aria-hidden="true"><circle r="1.38" fill="#231b12" stroke="#74c29b" stroke-width=".12"/><path transform="scale(.62)" fill="#74c29b" d="M -0.85,-0.7 L -0.32,-0.92 L 0,-0.6 L 0.32,-0.92 L 0.85,-0.7 L 0.62,0.05 L 0.72,0.95 L -0.72,0.95 L -0.62,0.05 Z"/></svg>Armor</li>
+        <li><svg viewBox="-1.5 -1.5 3 3" aria-hidden="true"><circle r="1.38" fill="#231b12" stroke="#7fa2ee" stroke-width=".12"/><path transform="scale(.62)" fill="#7fa2ee" d="M 0,-1 L 0.24,-0.24 L 1,0 L 0.24,0.24 L 0,1 L -0.24,0.24 L -1,0 L -0.24,-0.24 Z"/></svg>Spells</li>
+        <li><svg viewBox="-1.5 -1.5 3 3" aria-hidden="true"><circle r="1.38" fill="#231b12" stroke="#b7d17c" stroke-width=".12"/><path transform="scale(.62)" fill="#b7d17c" d="M 0,-1 L 0.62,-0.42 L 0.46,0.68 L 0,1 L -0.46,0.68 L -0.62,-0.42 Z"/></svg>Upgrade materials</li>
+        <li><svg viewBox="-1.5 -1.5 3 3" aria-hidden="true"><circle r="1.38" fill="#231b12" stroke="#f4eedc" stroke-width=".12"/><path transform="scale(.62)" fill="#f4eedc" d="M 0,-1 C 0.7,-0.2 0.78,0.3 0.52,0.66 C 0.3,0.96 -0.3,0.96 -0.52,0.66 C -0.78,0.3 -0.7,-0.2 0,-1 Z"/></svg>Souls</li>
+        <li><svg viewBox="-1.5 -1.5 3 3" aria-hidden="true"><circle r="1.38" fill="#231b12" stroke="#d2be94" stroke-width=".12"/><path transform="scale(.62)" fill="#d2be94" d="M 0,-1 L 0.36,-0.42 L 0.08,-0.42 L 0.08,0.4 L 0.42,0.72 L 0.42,1 L 0,0.68 L -0.42,1 L -0.42,0.72 L -0.08,0.4 L -0.08,-0.42 L -0.36,-0.42 Z"/></svg>Ammunition</li>
+        <li><svg viewBox="-1.5 -1.5 3 3" aria-hidden="true"><circle r="1.38" fill="#231b12" stroke="#b9b2a4" stroke-width=".12"/><path transform="scale(.62)" fill="#b9b2a4" d="M -0.26,-1 L 0.26,-1 L 0.26,-0.42 L 0.7,0.5 C 0.82,0.88 0.5,1 0,1 C -0.5,1 -0.82,0.88 -0.7,0.5 L -0.26,-0.42 Z"/></svg>Consumables</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Floors above floors</h2>
+      <div class="text">
+        <p>Areas with several storeys are split into layers. The one you stand on is drawn in ink; the ones below fade back and the ones above lie over it like tracing paper. On the full map you can page through them.</p>
+      </div>
+      <div class="pair">
+        <figure>
+          <img src="images/full-map-parchment.png" width="1200" height="760" alt="The demo keep with its lower layer shown: courtyard, store rooms and vault in ink, the terrace and gallery above them as a translucent wash.">
+          <figcaption>Standing in the vault: the courtyard level is in ink.</figcaption>
+        </figure>
+        <figure>
+          <img src="images/full-map-upper-parchment.png" width="1200" height="760" alt="The same keep with its upper layer shown: terrace, bridge and gallery in ink, the courtyard below faded.">
+          <figcaption>Up on the terrace: the same place, one layer higher.</figcaption>
+        </figure>
+      </div>
+      <div class="text" style="margin-top: 2rem">
+        <p>The map is a floor plan. It is drawn from the places you can walk, so it has no walls, buildings or landmarks. Step lines mark stairs and ramps.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>It reads. That is all it does.</h2>
+      <ul class="plain">
+        <li>It opens the game with the right to read and no other. The code that could write to a game, inject into it or press its keys is not in the program, and a test checks that on every build.</li>
+        <li>Your game files are read where they are and never changed. Maps and settings are kept in your own user folder.</li>
+        <li>It makes no network connections.</li>
+        <li>It never asks for administrator rights, and refuses to run with them.</li>
+        <li>The overlay is click-through. Mouse and keyboard stay with the game.</li>
+      </ul>
+      <div class="text" style="margin-top: 1.4rem">
+        <p>The source is open, and <a href="https://github.com/Buzzed-Lightyear/LootGoblinsMap-DS3/blob/main/docs/memory-reading.md">how the read-only guarantee is built and tested</a> is written down. Reading a game's memory is still something only its publisher can rule on for online play; if that worries you, play offline while you use it.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Start</h2>
+      <ol class="steps">
+        <li><a href="https://github.com/Buzzed-Lightyear/LootGoblinsMap-DS3/releases">Download the zip</a> and unzip it anywhere outside the game's folder.</li>
+        <li>Start <kbd>LootGoblinsMap.exe</kbd>, not as administrator. Windows may ask before running it, because it is not signed.</li>
+        <li>The first run finds the game through Steam and builds the maps from your own game files. It takes about half a minute.</li>
+        <li>Press "Start overlay".</li>
+        <li>Start the game in borderless or windowed mode and load a character.</li>
+      </ol>
+      <div class="text" style="margin-top: 1.6rem">
+        <p>You need Windows 10 or 11 and Dark Souls III from Steam, version 1.15.2. Nothing else has to be installed. The DLC is optional: its areas are mapped when you have it.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Keys</h2>
+      <table>
+        <thead><tr><th scope="col">Key</th><th scope="col">What it does</th></tr></thead>
+        <tbody>
+          <tr><td><kbd>F7</kbd></td><td>Full map on and off</td></tr>
+          <tr><td><kbd>Ctrl</kbd> <kbd>PageUp</kbd> / <kbd>PageDown</kbd></td><td>Layer up and down on the full map</td></tr>
+          <tr><td><kbd>F8</kbd></td><td>Settings</td></tr>
+          <tr><td><kbd>F9</kbd></td><td>Show or hide the overlay</td></tr>
+          <tr><td><kbd>F10</kbd></td><td>Mark a spot where something looks wrong</td></tr>
+        </tbody>
+      </table>
+      <div class="text" style="margin-top: 1.4rem">
+        <p>Every key can be changed in the settings.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>What it does not do</h2>
+      <ul class="plain">
+        <li>No exclusive fullscreen. Nothing can be drawn over that.</li>
+        <li>No bosses, enemies, merchants or enemy drops. Items lying in the world only.</li>
+        <li>One game version is tested. On another, it tells you and does what it safely can.</li>
+      </ul>
+      <div class="text" style="margin-top: 1.4rem">
+        <p>More in the <a href="https://github.com/Buzzed-Lightyear/LootGoblinsMap-DS3#readme">readme</a>, the <a href="https://github.com/Buzzed-Lightyear/LootGoblinsMap-DS3/blob/main/CHANGELOG.md">changelog</a> and the <a href="https://github.com/Buzzed-Lightyear/LootGoblinsMap-DS3/tree/main/docs">documentation</a>. Found something wrong? <a href="https://github.com/Buzzed-Lightyear/LootGoblinsMap-DS3/issues">Open an issue</a>.</p>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<footer>
+  <div class="column">
+    <hr>
+    <p>Loot Goblins Map is free software under the <a href="https://github.com/Buzzed-Lightyear/LootGoblinsMap-DS3/blob/main/LICENSE">GNU General Public License, version 3</a>. It builds on SoulsFormatsNEXT, Smithbox, UXM and SoulSplitter; the lettering is EB Garamond, under the <a href="fonts/OFL.txt">SIL Open Font License</a>. <a href="https://github.com/Buzzed-Lightyear/LootGoblinsMap-DS3/blob/main/THIRD-PARTY-NOTICES.md">Full notices</a>.</p>
+    <p>An unofficial fan project, not affiliated with or endorsed by FromSoftware or Bandai Namco Entertainment. Dark Souls is a trademark of its owners. This page and the program contain no game files, text or images.</p>
+  </div>
+</footer>
+
+</body>
+</html>
