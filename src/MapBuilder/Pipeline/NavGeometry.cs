@@ -12,6 +12,9 @@ public sealed class WorldFace
     public float MinX, MaxX, MinZ, MaxZ;
     public int Layer = -1;
 
+    /// <summary>Part of a stray piece far from the main body; kept in the data, left out of the image bounds.</summary>
+    public bool Stray;
+
     public void ComputeBounds()
     {
         MinY = float.MaxValue; MaxY = float.MinValue;

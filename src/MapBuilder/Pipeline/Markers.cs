@@ -1,4 +1,5 @@
 using System.Numerics;
+using MapBuilder.GameData;
 using MapCore;
 using SoulsFormats;
 
@@ -14,6 +15,17 @@ public sealed class Marker
     public int Layer = -1;
     public float DistToLayerPolyM = float.MaxValue;
     public double PixelX, PixelY;
+
+    // Filled from the game's params and text (ItemResolver); see MapDocument.MarkerInfo.
+    public string DisplayName;
+    public List<MapDocument.ItemInfo> Items = new();
+    public string Category;
+    public int Flag;
+    public bool Unresolved;
+    public List<string> Notes = new();
+    public bool Unused;
+    public string FromMap;
+    public bool Resolved;
 }
 
 public static class Markers
@@ -107,5 +119,89 @@ public static class Markers
                 m.DistToLayerPolyM = bestHoriz;
             }
         }
+    }
+
+    /// <summary>
+    /// Fills in what the game's params and text say about each marker: a bonfire's name and
+    /// lit flag, a treasure's items, category and pickup flag. Without a resolver (the game data
+    /// could not be read) every marker is left marked as unresolved.
+    /// </summary>
+    public static void Resolve(List<Marker> markers, ItemResolver resolver)
+    {
+        foreach (var m in markers)
+        {
+            if (m.Resolved)
+                continue;
+            m.Resolved = true;
+            if (m.Type == MapDocument.BonfireType)
+            {
+                m.Category = MapDocument.BonfireType;
+                if (resolver == null)
+                {
+                    m.Unresolved = true;
+                    m.Notes.Add("game data not loaded");
+                }
+                else if (resolver.TryGetBonfire(m.EntityId, out var info))
+                {
+                    m.DisplayName = info.Name;
+                    m.Flag = info.LitFlag;
+                    if (info.Name == null)
+                    {
+                        m.Unresolved = true;
+                        m.Notes.Add("the bonfire's name id has no text");
+                    }
+                }
+                else
+                {
+                    m.Unresolved = true;
+                    m.Notes.Add($"entity {m.EntityId} is not in the game's bonfire table");
+                }
+                continue;
+            }
+
+            if (resolver == null)
+            {
+                m.Category = ItemCategories.Unknown;
+                m.Unresolved = true;
+                m.Notes.Add("game data not loaded");
+                continue;
+            }
+            if (m.ItemLots.Count > 0 && m.ItemLots.All(lot => !resolver.LotExists(lot)))
+            {
+                // Nothing to pick up: the event points at lots the game does not have.
+                m.Category = ItemCategories.Unknown;
+                m.Unused = true;
+                m.Unresolved = true;
+                m.Notes.Add($"unused treasure event: item lot {string.Join("/", m.ItemLots)} is not in the regulation");
+                continue;
+            }
+            var treasure = resolver.Resolve(m.ItemLots);
+            m.Items = treasure.Items;
+            m.Flag = treasure.Flag;
+            m.Unresolved = treasure.Unresolved;
+            m.Notes.AddRange(treasure.Notes);
+            if (treasure.Flag <= 0)
+                m.Notes.Add("the lot has no pickup flag; the marker cannot be hidden when collected");
+            m.Category = ItemCategories.Primary(treasure.Items.Select(i => i.Category));
+        }
+    }
+
+    /// <summary>
+    /// Top-down distance from a point to the nearest polygon that is within 6 m of its height
+    /// (the same window the layer assignment uses); float.MaxValue when there is none nearby.
+    /// </summary>
+    public static float DistanceToMesh(Vector3 p, List<WorldFace> faces)
+    {
+        float best = float.MaxValue;
+        foreach (var f in faces)
+        {
+            if (p.X < f.MinX - 8 || p.X > f.MaxX + 8 || p.Z < f.MinZ - 8 || p.Z > f.MaxZ + 8)
+                continue;
+            float vert = p.Y < f.MinY ? f.MinY - p.Y : p.Y > f.MaxY ? p.Y - f.MaxY : 0f;
+            if (vert > 6f)
+                continue;
+            best = Math.Min(best, Geometry2D.DistancePointToPolyXZ(p, f.Vertices));
+        }
+        return best;
     }
 }

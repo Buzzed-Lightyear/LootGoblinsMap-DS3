@@ -8,34 +8,37 @@ namespace MapBuilder.Pipeline;
 public sealed record ExtractedFile(string InternalPath, string LocalPath, string Source);
 
 /// <summary>
-/// Locates the map files (mod override first, archives second), decompresses the DCX wrappers,
-/// and stores the decompressed payloads under work/extract. Only the files needed for the one
-/// target map are touched; the game folder is only ever opened for reading.
+/// Locates a map's files (mod override first, archives second), decompresses the DCX wrappers,
+/// and stores the decompressed payloads under work/extract/&lt;map&gt;. Only the three files a
+/// map needs are touched; the game folder is only ever opened for reading.
 /// </summary>
 public static class Extractor
 {
+    public static string MsbPath(string mapId) => $"/map/mapstudio/{mapId}.msb.dcx";
+    public static string NvaPath(string mapId) => $"/map/{mapId}/{mapId}.nva.dcx";
+    public static string NavmeshPath(string mapId) => $"/map/{mapId}/{mapId}.nvmhktbnd.dcx";
+
     public static IReadOnlyList<string> NeededPaths(string mapId) => new[]
     {
-        $"/map/mapstudio/{mapId}.msb.dcx",
-        $"/map/{mapId}/{mapId}.nva.dcx",
-        $"/map/{mapId}/{mapId}.nvmhktbnd.dcx",
+        MsbPath(mapId),
+        NvaPath(mapId),
+        NavmeshPath(mapId),
     };
 
-    public static List<ExtractedFile> Extract(Config cfg, ModScanResult mods, TextWriter log)
+    public static string ExtractDir(Config cfg, string mapId) => Path.Combine(cfg.ResolveWorkDir(), "extract", mapId);
+
+    /// <summary>Extracts one map. <paramref name="mods"/> may be null (no override scan).</summary>
+    public static List<ExtractedFile> Extract(ArchiveSet archives, Config cfg, string mapId, ModScanResult mods, TextWriter log)
     {
-        string gameDataDir = cfg.ResolveGameDataDir();
-        string extractDir = Path.Combine(cfg.ResolveWorkDir(), "extract", cfg.MapId);
+        string extractDir = ExtractDir(cfg, mapId);
         Directory.CreateDirectory(extractDir);
 
         var results = new List<ExtractedFile>();
-        using var archives = ArchiveSet.OpenDarkSouls3(gameDataDir);
-        log.WriteLine($"Opened archives: {string.Join(", ", archives.ArchiveNames)}");
-
-        foreach (var internalPath in NeededPaths(cfg.MapId))
+        foreach (var internalPath in NeededPaths(mapId))
         {
             byte[] raw;
             string source;
-            if (mods.NeededFileOverrides.TryGetValue(internalPath, out var overridePath))
+            if (mods != null && mods.NeededFileOverrides.TryGetValue(internalPath, out var overridePath))
             {
                 string fsPath = overridePath[(overridePath.IndexOf(": ") + 2)..];
                 raw = File.ReadAllBytes(fsPath);
@@ -54,7 +57,7 @@ public static class Extractor
             string localName = Path.GetFileNameWithoutExtension(internalPath); // strip ".dcx"
             string localPath = Path.Combine(extractDir, localName);
             File.WriteAllBytes(localPath, payload);
-            log.WriteLine($"{internalPath}  <-  {source}  ({raw.Length:N0} B compressed, {payload.Length:N0} B decompressed)");
+            log.WriteLine($"  {internalPath}  <-  {source}  ({raw.Length:N0} B compressed, {payload.Length:N0} B decompressed)");
             results.Add(new ExtractedFile(internalPath, localPath, source));
         }
 

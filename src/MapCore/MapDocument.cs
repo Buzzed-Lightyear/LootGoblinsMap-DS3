@@ -14,6 +14,19 @@ public sealed class MapDocument
     public const string FileName = "map.json";
 
     public string Map { get; set; }
+
+    /// <summary>The area's name from the game's own text (null when the game has none for this map).</summary>
+    public string Name { get; set; }
+
+    /// <summary>The archive the map came from; maps from the DLC archives are flagged.</summary>
+    public string Source { get; set; }
+    public bool Dlc { get; set; }
+
+    /// <summary>World-space box of the main body of the navmesh: minX, maxX, minY, maxY, minZ, maxZ. The image covers its X/Z extent.</summary>
+    public float[] Bounds { get; set; }
+
+    /// <summary>Polygons that lie outside the image because they are stray pieces far from the main body.</summary>
+    public int StrayPolygonCount { get; set; }
     public AxisConventionInfo AxisConvention { get; set; } = new();
     public TransformInfo Transform { get; set; } = new();
 
@@ -70,11 +83,66 @@ public sealed class MapDocument
         public double[] Pixel { get; set; }
         public double DistToLayerPolyM { get; set; }
 
+        /// <summary>Bonfires: the name the game shows. Null when unresolved.</summary>
+        public string DisplayName { get; set; }
+
+        /// <summary>Treasures: what the marker holds, resolved from the item lots.</summary>
+        public List<ItemInfo> Items { get; set; } = new();
+
+        /// <summary>The category the marker is filtered and coloured by (see <see cref="ItemCategories"/>).</summary>
+        public string Category { get; set; }
+
+        /// <summary>
+        /// The event flag that says this marker is done: picked up for a treasure, lit for a
+        /// bonfire. 0 when the game data gives none.
+        /// </summary>
+        public int Flag { get; set; }
+
+        /// <summary>True when something about the marker could not be resolved from the game data.</summary>
+        public bool Unresolved { get; set; }
+
+        /// <summary>
+        /// A treasure event whose item lots do not exist in the game's params: a leftover that
+        /// cannot be picked up. Kept for the record, never shown.
+        /// </summary>
+        public bool Unused { get; set; }
+
+        /// <summary>Set when the marker is defined in another map's file but stands on this map's floor.</summary>
+        public string FromMap { get; set; }
+
+        /// <summary>Why, when <see cref="Unresolved"/> is set.</summary>
+        public List<string> Notes { get; set; } = new();
+
+        /// <summary>Short label for the map: the bonfire name, or the item names.</summary>
+        [JsonIgnore]
+        public string Label
+        {
+            get
+            {
+                if (IsBonfire)
+                    return DisplayName ?? "Bonfire";
+                var named = Items.Where(i => i.Name != null).ToList();
+                if (named.Count == 0)
+                    return "Unknown item";
+                return string.Join(", ", named.Select(i => i.Count > 1 ? $"{i.Name} ×{i.Count}" : i.Name));
+            }
+        }
+
         [JsonIgnore]
         public Vector3 WorldPosition => new(World[0], World[1], World[2]);
 
         [JsonIgnore]
         public bool IsBonfire => Type == BonfireType;
+    }
+
+    public sealed class ItemInfo
+    {
+        public string Name { get; set; }
+        public string Category { get; set; }
+        public int Count { get; set; } = 1;
+        public int ItemId { get; set; }
+        /// <summary>100 for a certain item; lower when the lot draws one of several.</summary>
+        public int ChancePercent { get; set; } = 100;
     }
 
     public const string BonfireType = "bonfire";

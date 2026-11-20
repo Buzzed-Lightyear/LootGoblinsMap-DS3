@@ -1,17 +1,32 @@
-using System.Numerics;
+using MapBuilder.GameData;
 using MapBuilder.Render;
 using MapCore;
 
 namespace MapBuilder.Pipeline;
 
+/// <summary>What the builder knows beyond a map's own files: the game's params and text, and where the map came from.</summary>
+public sealed class MapBuildContext
+{
+    /// <summary>Null when the regulation or text could not be read: markers are then left unresolved.</summary>
+    public ItemResolver Resolver;
+    public string Source;
+    public bool Dlc;
+}
+
 public sealed class BuildResult
 {
+    public string MapId;
+    public string Name;
     public List<WorldFace> Faces;
     public List<Layer> Layers;
     public List<Marker> MarkerList;
     public MapTransform Transform;
     public string OutDir;
+    /// <summary>World-space box of the main body (stray pieces excluded).</summary>
     public (float MinX, float MaxX, float MinY, float MaxY, float MinZ, float MaxZ) Bounds;
+    public int StrayPolygons;
+    public int Seams;
+    public int SelfOverlaps;
 }
 
 public static class BuildPipeline
@@ -19,26 +34,38 @@ public static class BuildPipeline
     /// <summary>Padding around the navmesh bounds, in metres.</summary>
     public const double PadMeters = 3.0;
 
-    public static BuildResult Run(Config cfg, string extractDir, TextWriter log)
+    public static BuildResult Run(Config cfg, string mapId, string extractDir, MapBuildContext context, TextWriter log)
     {
-        string nvaPath = Path.Combine(extractDir, $"{cfg.MapId}.nva");
-        string bndPath = Path.Combine(extractDir, $"{cfg.MapId}.nvmhktbnd");
-        string msbPath = Path.Combine(extractDir, $"{cfg.MapId}.msb");
+        var (faces, markers) = Decode(mapId, extractDir, log);
+        return Export(cfg, mapId, faces, markers, context, log);
+    }
+
+    /// <summary>Reads a map's extracted files: the navmesh as world-space polygons and the markers from the map file.</summary>
+    public static (List<WorldFace> Faces, List<Marker> Markers) Decode(string mapId, string extractDir, TextWriter log)
+    {
+        string nvaPath = Path.Combine(extractDir, $"{mapId}.nva");
+        string bndPath = Path.Combine(extractDir, $"{mapId}.nvmhktbnd");
+        string msbPath = Path.Combine(extractDir, $"{mapId}.msb");
 
         var faces = NavGeometry.Load(nvaPath, bndPath, log);
-        log.WriteLine($"Decoded {faces.Count} world-space polygons.");
+        log.WriteLine($"  Decoded {faces.Count} world-space polygons.");
         if (faces.Count == 0)
             throw new InvalidDataException("Navmesh decoded to zero polygons.");
 
         var markers = Markers.FromMsb(msbPath, log);
-        return Export(cfg, faces, markers, log);
+        return (faces, markers);
     }
 
+    /// <summary>Export with the config's own map id and no game data: what the tests drive.</summary>
+    public static BuildResult Export(Config cfg, List<WorldFace> faces, List<Marker> markers, TextWriter log) =>
+        Export(cfg, cfg.MapId, faces, markers, null, log);
+
     /// <summary>
-    /// Everything after decoding: layering, marker placement, the transform, images, map.json
-    /// and the polygon file. Takes plain geometry so tests can drive it without game files.
+    /// Everything after decoding: layering, marker placement and naming, the transform, images,
+    /// map.json and the polygon file. Takes plain geometry so tests can drive it without game files.
     /// </summary>
-    public static BuildResult Export(Config cfg, List<WorldFace> faces, List<Marker> markers, TextWriter log)
+    public static BuildResult Export(Config cfg, string mapId, List<WorldFace> faces, List<Marker> markers,
+                                     MapBuildContext context, TextWriter log)
     {
         List<Layer> layers;
         if (string.Equals(cfg.LayerMode, "stack", StringComparison.OrdinalIgnoreCase))
@@ -52,17 +79,17 @@ public static class BuildPipeline
                 foreach (var f in layers[i].Faces)
                     f.Layer = i;
             }
-            log.WriteLine("Layering: stack order (every polygon on the lowest layer with room for it).");
+            log.WriteLine("  Layering: stack order (every polygon on the lowest layer with room for it).");
         }
         else if (string.Equals(cfg.LayerMode, "floors", StringComparison.OrdinalIgnoreCase))
         {
-            // Layers already come out bottom-up (a floor is numbered above what it lies over); keep that order.
+            // Layers already come out bottom-up by mean height; keep that order.
             var split = FloorLayering.Split(faces, new FloorLayering.Options
             {
                 SplitHeight = cfg.LayerSplitHeight, JoinStep = cfg.LayerJoinStep, FlatSlopeDegrees = cfg.LayerFlatSlopeDegrees,
             });
             layers = split.Layers;
-            log.WriteLine($"Layering: connected floors — {split.Links} links, {split.FlatPatches} level patches, {split.Regions} regions; " +
+            log.WriteLine($"  Layering: connected floors — {split.Links} links, {split.FlatPatches} level patches, {split.Regions} regions; " +
                           $"seams {split.SeamsBeforeRefining} → {split.Seams} after refining " +
                           $"(level/level {split.SeamsLevelToLevel}, level/steep {split.SeamsLevelToSteep}, steep/steep {split.SeamsSteepToSteep}).");
         }
@@ -71,26 +98,28 @@ public static class BuildPipeline
             throw new InvalidDataException($"layerMode must be \"floors\" or \"stack\", not \"{cfg.LayerMode}\".");
         }
         int seams = FloorLayering.CountSeams(faces, cfg.LayerJoinStep);
-        log.WriteLine($"Seams (touching polygons under {cfg.LayerJoinStep} m of step on different layers): {seams}");
         int selfOverlaps = FloorLayering.CountSelfOverlaps(faces, cfg.LayerSplitHeight);
-        if (selfOverlaps > 0)
-            throw new InvalidDataException($"Layering is invalid: {selfOverlaps} face pairs lie over each other within one layer.");
-        log.WriteLine("No layer lies over itself (0 stacked pairs within a layer).");
-        log.WriteLine($"Split into {layers.Count} layers: " +
-            string.Join(", ", layers.Select(l => $"#{l.Index}[{l.Faces.Count} faces, y {l.MinY:F1}..{l.MaxY:F1}]")));
+        log.WriteLine($"  Split into {layers.Count} layers: " +
+            string.Join(", ", layers.Select(l => $"#{l.Index}[{l.Faces.Count} faces, y {l.MinY:F1}..{l.MaxY:F1}]")) +
+            $"; {seams} seams; {selfOverlaps} stacked pairs within a layer.");
 
         Markers.AssignLayers(markers, faces);
+        Markers.Resolve(markers, context?.Resolver);
 
-        float minX = faces.Min(f => f.MinX), maxX = faces.Max(f => f.MaxX);
-        float minZ = faces.Min(f => f.MinZ), maxZ = faces.Max(f => f.MaxZ);
-        float minY = faces.Min(f => f.MinY), maxY = faces.Max(f => f.MaxY);
+        // Image bounds: the main body only. Stray pieces stay in the data but do not stretch the image.
+        int strays = MainBody.MarkStrays(faces);
+        var body = faces.Where(f => !f.Stray).ToList();
+        float minX = body.Min(f => f.MinX), maxX = body.Max(f => f.MaxX);
+        float minZ = body.Min(f => f.MinZ), maxZ = body.Max(f => f.MaxZ);
+        float minY = body.Min(f => f.MinY), maxY = body.Max(f => f.MaxY);
         var t = CreateTransform(cfg, minX, maxX, minZ, maxZ);
-        log.WriteLine($"Bounds: X {minX:F1}..{maxX:F1}  Y {minY:F1}..{maxY:F1}  Z {minZ:F1}..{maxZ:F1}  →  {t.Width}x{t.Height} px @ {t.Scale} px/m ({t.Orientation})");
+        log.WriteLine($"  Bounds: X {minX:F1}..{maxX:F1}  Y {minY:F1}..{maxY:F1}  Z {minZ:F1}..{maxZ:F1}  →  {t.Width}x{t.Height} px @ {t.Scale} px/m ({t.Orientation})" +
+                      (strays > 0 ? $"; {strays} stray polygons left outside the image" : ""));
 
         foreach (var m in markers)
             (m.PixelX, m.PixelY) = t.ToPixel(m.World);
 
-        string outDir = Path.Combine(cfg.ResolveOutDir(), cfg.MapId);
+        string outDir = Path.Combine(cfg.ResolveOutDir(), mapId);
         Directory.CreateDirectory(outDir);
 
         // Remove layer images left by an earlier build that had more layers than this one.
@@ -104,20 +133,24 @@ public static class BuildPipeline
                 File.Delete(stale);
         }
 
-        foreach (var layer in layers)
-            RenderLayer(outDir, layer, markers, t);
+        if (cfg.WriteLayerImages)
+            foreach (var layer in layers)
+                RenderLayer(outDir, layer, markers, t);
 
-        // Navmesh polygons for the tracker: world-space vertices and layer index.
+        // Navmesh polygons for the tracker: world-space vertices and layer index (stray pieces included).
         var polygons = faces.Select(f => new NavPolygon(f.Vertices, f.Layer)).ToList();
         NavPolyFile.Write(Path.Combine(outDir, NavPolyFile.FileName), polygons);
 
-        WriteMapJson(cfg, outDir, layers, markers, t, polygons.Count);
-        log.WriteLine($"Wrote {layers.Count} layer SVG+PNG pairs, {MapDocument.FileName} and {NavPolyFile.FileName} ({polygons.Count} polygons) to {outDir}");
+        string areaName = context?.Resolver?.AreaName(mapId);
+        var bounds = (minX, maxX, minY, maxY, minZ, maxZ);
+        WriteMapJson(mapId, areaName, context, cfg.WriteLayerImages, outDir, layers, markers, t, polygons.Count, bounds, strays);
+        log.WriteLine($"  Wrote {(cfg.WriteLayerImages ? $"{layers.Count} layer SVG+PNG pairs, " : "")}{MapDocument.FileName} and {NavPolyFile.FileName} ({polygons.Count} polygons) to {outDir}");
 
         return new BuildResult
         {
+            MapId = mapId, Name = areaName,
             Faces = faces, Layers = layers, MarkerList = markers, Transform = t, OutDir = outDir,
-            Bounds = (minX, maxX, minY, maxY, minZ, maxZ),
+            Bounds = bounds, StrayPolygons = strays, Seams = seams, SelfOverlaps = selfOverlaps,
         };
     }
 
@@ -128,11 +161,11 @@ public static class BuildPipeline
     private static void RenderLayer(string outDir, Layer layer, List<Marker> markers, MapTransform t)
     {
         var polysPx = new List<(double, double)[]>(layer.Faces.Count);
-        foreach (var f in layer.Faces)
+        foreach (var f in layer.Faces.Where(f => !f.Stray))
             polysPx.Add(f.Vertices.Select(v => t.ToPixel(v)).ToArray());
 
         // Layer outline: edges used by only one polygon (shared helper, same as the tracker draws).
-        var boundary = Geometry2D.OutlineEdgesXZ(layer.Faces.Select(f => f.Vertices))
+        var boundary = Geometry2D.OutlineEdgesXZ(layer.Faces.Where(f => !f.Stray).Select(f => f.Vertices))
             .Select(e => (t.ToPixel(e.A), t.ToPixel(e.B))).ToList();
 
         // SVG
@@ -160,11 +193,18 @@ public static class BuildPipeline
         PngWriter.Write(Path.Combine(outDir, $"layer_{layer.Index}.png"), img);
     }
 
-    private static void WriteMapJson(Config cfg, string outDir, List<Layer> layers, List<Marker> markers, MapTransform t, int polygonCount)
+    private static void WriteMapJson(string mapId, string areaName, MapBuildContext context, bool images, string outDir,
+                                     List<Layer> layers, List<Marker> markers, MapTransform t, int polygonCount,
+                                     (float MinX, float MaxX, float MinY, float MaxY, float MinZ, float MaxZ) b, int strays)
     {
         var doc = new MapDocument
         {
-            Map = cfg.MapId,
+            Map = mapId,
+            Name = areaName,
+            Source = context?.Source,
+            Dlc = context?.Dlc ?? false,
+            Bounds = new[] { b.MinX, b.MaxX, b.MinY, b.MaxY, b.MinZ, b.MaxZ },
+            StrayPolygonCount = strays,
             NavPolygons = NavPolyFile.FileName,
             NavPolygonCount = polygonCount,
             Layers = layers.Select(l => new MapDocument.LayerInfo
@@ -172,8 +212,8 @@ public static class BuildPipeline
                 Index = l.Index,
                 HeightRange = new[] { l.MinY, l.MaxY },
                 FaceCount = l.Faces.Count,
-                Svg = $"layer_{l.Index}.svg",
-                Png = $"layer_{l.Index}.png",
+                Svg = images ? $"layer_{l.Index}.svg" : null,
+                Png = images ? $"layer_{l.Index}.png" : null,
             }).ToList(),
             Markers = markers.Select(m => new MapDocument.MarkerInfo
             {
@@ -185,6 +225,14 @@ public static class BuildPipeline
                 Layer = m.Layer,
                 Pixel = new[] { m.PixelX, m.PixelY },
                 DistToLayerPolyM = m.DistToLayerPolyM == float.MaxValue ? -1 : Math.Round(m.DistToLayerPolyM, 3),
+                DisplayName = m.DisplayName,
+                Items = m.Items,
+                Category = m.Category,
+                Flag = m.Flag,
+                Unresolved = m.Unresolved,
+                Unused = m.Unused,
+                FromMap = m.FromMap,
+                Notes = m.Notes,
             }).ToList(),
         };
         doc.SetTransform(t);

@@ -12,7 +12,17 @@ public sealed class Config
     /// <summary>External mod override folder (Mod Engine style), or null/empty if none.</summary>
     public string ModPath { get; set; }
 
+    /// <summary>The map shown before the game says which one the player is in, and the one single-map commands use.</summary>
     public string MapId { get; set; } = "m30_00_00_00";
+
+    /// <summary>Which maps the builder builds: "all" (every map found in the archives) or a comma-separated list of map ids.</summary>
+    public string Maps { get; set; } = "all";
+
+    /// <summary>Folder name of the game text language under /msg (item and place names).</summary>
+    public string Language { get; set; } = "engus";
+
+    /// <summary>Also write a PNG and SVG per layer. The tracker does not need them.</summary>
+    public bool WriteLayerImages { get; set; } = true;
 
     /// <summary>Output directory for images/JSON (relative paths are resolved against the project root).</summary>
     public string OutDir { get; set; } = "out";

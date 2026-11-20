@@ -50,6 +50,17 @@ public sealed class Ds3Archive : IDisposable
         return false;
     }
 
+    /// <summary>Whether the archive lists this path (a hash lookup; nothing is read from the .bdt).</summary>
+    public bool Contains(string internalPath)
+    {
+        uint hash = HashHelper.FromPathHash(internalPath);
+        var bucket = _header.Buckets[(int)(hash % (uint)_header.Buckets.Count)];
+        foreach (var fh in bucket)
+            if (fh.FileNameHash == hash)
+                return true;
+        return false;
+    }
+
     public void Dispose() => _bdt.Dispose();
 }
 
@@ -91,6 +102,16 @@ public sealed class ArchiveSet : IDisposable
             }
         }
         return bytes != null;
+    }
+
+    /// <summary>The archive that would serve this path (last match wins), or null. Reads no file data.</summary>
+    public string FindArchive(string internalPath)
+    {
+        string found = null;
+        foreach (var archive in _archives)
+            if (archive.Contains(internalPath))
+                found = archive.Name;
+        return found;
     }
 
     public void Dispose()
