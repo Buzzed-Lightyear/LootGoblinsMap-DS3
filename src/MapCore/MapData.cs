@@ -8,6 +8,12 @@ namespace MapCore;
 public sealed class MapData
 {
     public string Directory { get; private init; }
+
+    /// <summary>The map id, for example "m30_00_00_00".</summary>
+    public string Id => Document.Map;
+
+    /// <summary>The area's name from the game's text, or the map id when the game has none.</summary>
+    public string Name => string.IsNullOrEmpty(Document.Name) ? Document.Map : Document.Name;
     public MapDocument Document { get; private init; }
     public IReadOnlyList<NavPolygon> Polygons { get; private init; }
     public PolygonLocator Locator { get; private init; }

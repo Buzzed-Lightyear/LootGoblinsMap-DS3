@@ -6,10 +6,10 @@ using Tracker.Memory;
 namespace Tracker.Sources;
 
 /// <summary>
-/// Reads the player position from the running game. Read-only: the process is opened through
-/// <see cref="ProcessMemory"/> (read + limited query rights) and nothing in here can change it.
-/// Never starts, stops, focuses or sends input to the game. Attaches when the game appears,
-/// lets go when it exits, and tries again on its own.
+/// Reads the player position, the current map id and event flags from the running game.
+/// Read-only: the process is opened through <see cref="ProcessMemory"/> (read + limited query
+/// rights) and nothing in here can change it. Never starts, stops, focuses or sends input to
+/// the game. Attaches when the game appears, lets go when it exits, and tries again on its own.
 /// </summary>
 public sealed class LiveGameSource : IPositionSource
 {
@@ -27,7 +27,10 @@ public sealed class LiveGameSource : IPositionSource
     /// <summary>Human-readable notes from the last attach (addresses, scan results) for diagnostics.</summary>
     public string AttachLog { get; private set; } = "";
 
+    /// <summary>The attached game's process id, for finding its window; null while not attached.</summary>
     public int? ProcessId => _memory?.ProcessId;
+
+    public bool CanReadEventFlags => _memory != null && _ds3.CanReadEventFlags;
 
     public PositionSample Read()
     {
@@ -59,8 +62,26 @@ public sealed class LiveGameSource : IPositionSource
             return PositionSample.Of(SourceStatus.NoCharacter, _version, attached);
         }
 
-        return new PositionSample(SourceStatus.Ok, position, _version, attached);
+        // The game's own idea of which map the player is in. A zero or absurd value means "not known".
+        string? mapId = null;
+        if (_ds3.TryGetMapId(out uint packed) && packed >> 24 is > 0 and < 100)
+            mapId = MapIds.FromPacked(packed);
+
+        return new PositionSample(SourceStatus.Ok, position, _version, attached, mapId);
     }
+
+    public IReadOnlyDictionary<int, bool>? ReadFlags(IReadOnlyList<int> flags)
+    {
+        if (_memory == null || !_ds3.CanReadEventFlags || !_ds3.IsPlayerLoaded())
+            return null;
+        var states = new Dictionary<int, bool>(flags.Count);
+        foreach (int flag in flags)
+            states[flag] = _ds3.ReadEventFlag((uint)flag);
+        return states;
+    }
+
+    /// <summary>One flag, for the live checks.</summary>
+    public bool? ReadFlag(int flag) => ReadFlags(new[] { flag })?[flag];
 
     private PositionSample TryAttach()
     {
@@ -99,6 +120,7 @@ public sealed class LiveGameSource : IPositionSource
                 $"version {_version}\n" +
                 $"main module 0x{memory.MainModuleBase:X}, {memory.MainModuleSize:N0} bytes\n" +
                 $"scans failed: {(failed.Count == 0 ? "none" : string.Join(", ", failed))}\n" +
+                $"event flags readable: {_ds3.CanReadEventFlags}\n" +
                 $"WorldChrMan static 0x{_ds3.WorldChrManStaticAddress:X} (module+0x{_ds3.WorldChrManStaticAddress - memory.MainModuleBase:X})";
 
             if (!_ds3.CanReadPlayer)
