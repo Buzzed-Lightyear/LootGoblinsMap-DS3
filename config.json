@@ -1,0 +1,14 @@
+{
+  // Game install root (the folder containing Game/DarkSoulsIII.exe, or the Game folder itself).
+  // On Windows this would be e.g. "G:\\SteamLibrary\\steamapps\\common\\DARK SOULS III".
+  "gamePath": "/mnt/g/SteamLibrary/steamapps/common/DARK SOULS III",
+  // External mod override folder, or null — this install has mods inside the game folder.
+  "modPath": null,
+  "mapId": "m30_00_00_00",
+  "outDir": "out",
+  "workDir": "work",
+  "pixelsPerMeter": 6.0,
+  "flipX": false,
+  "flipZ": false,
+  "layerSplitHeight": 1.8
+}
