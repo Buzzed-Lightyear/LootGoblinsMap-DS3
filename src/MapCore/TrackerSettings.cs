@@ -170,6 +170,11 @@ public sealed class TrackerSettings
     public string LayerDownHotkey { get; set; } = "Ctrl+PageDown";
     public string SettingsHotkey { get; set; } = "F8";
     public string ToggleOverlayHotkey { get; set; } = "F9";
+    /// <summary>Drops a "something is wrong here" note into feedback.log.</summary>
+    public string MarkFeedbackHotkey { get; set; } = "F10";
+
+    /// <summary>Name of the theme file (without .json) in the data folder's themes folder: "parchment" or "plain".</summary>
+    public string Theme { get; set; } = "parchment";
 
     /// <summary>Optional controller chord for the full map. Off by default: the game receives the same buttons.</summary>
     public bool ControllerChordEnabled { get; set; }
@@ -235,6 +240,9 @@ public sealed class TrackerSettings
         LayerDownHotkey = CheckHotkey(nameof(LayerDownHotkey), LayerDownHotkey, defaults.LayerDownHotkey);
         SettingsHotkey = CheckHotkey(nameof(SettingsHotkey), SettingsHotkey, defaults.SettingsHotkey);
         ToggleOverlayHotkey = CheckHotkey(nameof(ToggleOverlayHotkey), ToggleOverlayHotkey, defaults.ToggleOverlayHotkey);
+        MarkFeedbackHotkey = CheckHotkey(nameof(MarkFeedbackHotkey), MarkFeedbackHotkey, defaults.MarkFeedbackHotkey);
+        if (string.IsNullOrWhiteSpace(Theme) || Theme.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+            Theme = defaults.Theme;
 
         // Two actions on one shortcut: only the first could ever fire.
         var seen = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -242,6 +250,7 @@ public sealed class TrackerSettings
                  {
                      (nameof(FullMapHotkey), FullMapHotkey), (nameof(LayerUpHotkey), LayerUpHotkey), (nameof(LayerDownHotkey), LayerDownHotkey),
                      (nameof(SettingsHotkey), SettingsHotkey), (nameof(ToggleOverlayHotkey), ToggleOverlayHotkey),
+                     (nameof(MarkFeedbackHotkey), MarkFeedbackHotkey),
                  })
         {
             if (seen.TryGetValue(value, out string other))

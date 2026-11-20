@@ -13,6 +13,10 @@ internal sealed class OverlayState
     public int? ShownLayer;
     /// <summary>A line shown briefly at the bottom (for example "settings saved").</summary>
     public string? Notice;
+    /// <summary>The area's name, shown large for a few seconds after a map switch.</summary>
+    public string? Banner;
+    /// <summary>A standing warning (unsupported game build), shown whenever no notice is.</summary>
+    public string? Warning;
 }
 
 /// <summary>
@@ -66,7 +70,7 @@ internal sealed class OverlayView : FrameworkElement
         var f = session.Current;
         // Positions are compared at a quarter of a screen pixel: standing still costs nothing.
         string signature = string.Create(System.Globalization.CultureInfo.InvariantCulture,
-            $"{session.Map.Id}|{session.Revision}|{f.State}|{f.Layer}|{Math.Round(f.PixelX * 4)}|{Math.Round(f.PixelY * 4)}|{session.Trail.Count}|{State.FullMap}|{State.ShownLayer}|{State.Notice}|{_panel}|{_core.SettingsVersion}");
+            $"{session.Map.Id}|{session.Revision}|{f.State}|{f.Layer}|{Math.Round(f.PixelX * 4)}|{Math.Round(f.PixelY * 4)}|{session.Trail.Count}|{State.FullMap}|{State.ShownLayer}|{State.Notice}|{State.Banner}|{State.Warning}|{_panel}|{_core.SettingsVersion}");
         if (signature == _drawnSignature)
             return false;
         _drawnSignature = signature;
@@ -119,13 +123,16 @@ internal sealed class OverlayView : FrameworkElement
             {
                 Opaque = false,
                 PanelOpacity = 0.95,
+                Paper = true,
+                Banner = state.Banner,
                 ShownLayer = state.ShownLayer,
                 LabelCount = -1,
                 Legend = true,
                 Settings = settings,
                 Title = $"{map.Name}  ·  {layerText}",
                 Footer = $"{left} of {total} items left   ·   {settings.FullMapHotkey} close   ·   {settings.LayerUpHotkey} / {settings.LayerDownHotkey} layer   ·   {settings.SettingsHotkey} settings" +
-                         (state.Notice != null ? "   ·   " + state.Notice : ""),
+                         (state.Notice != null ? "   ·   " + state.Notice : "") +
+                         (state.Warning != null ? "   ·   " + state.Warning : ""),
             };
             core.Renderer.Render(dc, panel, session, fullView, style, Readout.Message(session, brief: true), null, pixelsPerDip);
             return;
@@ -138,10 +145,13 @@ internal sealed class OverlayView : FrameworkElement
         {
             Opaque = false,
             PanelOpacity = settings.MinimapOpacity,
+            Minimap = true,
             LabelCount = settings.MinimapLabels,
             Settings = settings,
-            Title = map.Name,
-            Footer = state.Notice,
+            // The area's name is shown large for a moment after a switch, then stays as the small title.
+            Title = state.Banner == null ? map.Name : null,
+            Banner = state.Banner,
+            Footer = state.Notice ?? state.Warning,
         };
         core.Renderer.Render(dc, panel, session, miniView, miniStyle, Readout.Message(session, brief: true), null, pixelsPerDip);
     }

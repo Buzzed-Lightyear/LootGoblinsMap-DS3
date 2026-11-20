@@ -55,6 +55,11 @@ public sealed class TrackFrame
     public float Distance = float.NaN;
     /// <summary>The map id the game reported (null when it could not be read), and the map being shown.</summary>
     public string GameMapId, ShownMapId;
+    /// <summary>
+    /// Set when the value read as the map id is not a map id of this game at all: the game build
+    /// is not one the tracker knows, and the map is being chosen by position instead.
+    /// </summary>
+    public string UnknownMapId;
 }
 
 public enum TrackEventKind { MapSwitch, FlagFlip, BonfireRest }
@@ -85,6 +90,7 @@ public sealed class TrackingSession
 
     public const string MethodMapId = "map id read from memory";
     public const string MethodPosition = "position (no map id available)";
+    public const string MethodPositionUnknownId = "position (the map id read is not a known map: unsupported game build)";
 
     private readonly MapSet _maps;
     private readonly List<Vector3?> _trail = new();
@@ -176,7 +182,19 @@ public sealed class TrackingSession
         // Which map? The game's own map id decides. Without one, the position does, if exactly one map fits.
         string wanted = null, method = null;
         bool unbuilt = false;
-        if (sample.MapId != null)
+        // A value that is not one of the game's map ids means the fixed offset does not hold the
+        // map id in this game build. It is not trusted; the position decides where it can.
+        bool unknownId = sample.MapId != null && _maps.Get(sample.MapId) == null && !_maps.Index.IsKnownMapId(sample.MapId);
+        if (unknownId)
+        {
+            frame.UnknownMapId = sample.MapId;
+            if (Map.Locator.Locate(p) is not { Found: true, Distance: <= OutsideDistance })
+                wanted = _maps.LocateByPosition(p);
+            method = MethodPositionUnknownId;
+            if (wanted == null)
+                MapMethod = method;
+        }
+        else if (sample.MapId != null)
         {
             if (_maps.Get(sample.MapId) != null)
             {

@@ -23,7 +23,11 @@ internal sealed class SettingsWindow : Window
     private readonly CheckBox _chordEnabled = Check("Controller chord for the full map (the game also receives these buttons)");
     private readonly TextBlock _status = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 10, 0, 0) };
 
-    public SettingsWindow(TrackerSettings current, IReadOnlyList<string> hotkeyProblems, Func<TrackerSettings, IReadOnlyList<string>> apply)
+    private readonly TextBox _mark = Box();
+    private readonly ComboBox _theme = new() { Width = 140, HorizontalAlignment = HorizontalAlignment.Left };
+
+    public SettingsWindow(TrackerSettings current, IReadOnlyList<string> hotkeyProblems, Func<TrackerSettings, IReadOnlyList<string>> apply,
+                          Tracker.App.AppEnvironment? env = null)
     {
         _apply = apply;
         Title = "Loot Goblins Map — settings";
@@ -51,6 +55,14 @@ internal sealed class SettingsWindow : Window
         _showBonfires.IsChecked = current.ShowBonfires;
         panel.Children.Add(_showCollected);
         panel.Children.Add(_showBonfires);
+
+        panel.Children.Add(Header("Look"));
+        foreach (string theme in Tracker.Rendering.Theme.Available(env?.ThemesDir))
+            _theme.Items.Add(theme);
+        if (!_theme.Items.Contains(current.Theme))
+            _theme.Items.Add(current.Theme);
+        _theme.SelectedItem = current.Theme;
+        panel.Children.Add(Row("Theme", _theme));
 
         panel.Children.Add(Header("Minimap"));
         foreach (var corner in Enum.GetValues<Corner>())
@@ -85,6 +97,8 @@ internal sealed class SettingsWindow : Window
         panel.Children.Add(Row("Layer down (full map)", _layerDown));
         panel.Children.Add(Row("This window", _settings));
         panel.Children.Add(Row("Show / hide overlay", _toggle));
+        _mark.Text = current.MarkFeedbackHotkey;
+        panel.Children.Add(Row("Mark a spot for feedback", _mark));
 
         panel.Children.Add(Header("Controller"));
         _chordEnabled.IsChecked = current.ControllerChordEnabled;
@@ -106,6 +120,36 @@ internal sealed class SettingsWindow : Window
         buttons.Children.Add(closeButton);
         panel.Children.Add(buttons);
         panel.Children.Add(_status);
+
+        if (env != null)
+        {
+            panel.Children.Add(Header("Playtest feedback"));
+            var tools = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
+            var open = new Button { Content = "Open data folder", Padding = new Thickness(10, 4, 10, 4) };
+            open.Click += (_, _) =>
+            {
+                if (!Tracker.App.AppEnvironment.OpenFolder(env.DataDir))
+                    MessageBox.Show(this, "The data folder is:\n\n" + env.DataDir, Title);
+            };
+            var export = new Button { Content = "Export feedback", Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(8, 0, 0, 0) };
+            export.Click += (_, _) =>
+            {
+                try { MessageBox.Show(this, "Feedback exported to your desktop:\n\n" + env.ExportFeedback(), Title); }
+                catch (Exception ex) { MessageBox.Show(this, "Could not export: " + ex.Message, Title); }
+            };
+            tools.Children.Add(open);
+            tools.Children.Add(export);
+            panel.Children.Add(tools);
+            panel.Children.Add(new TextBlock
+            {
+                TextWrapping = TextWrapping.Wrap, Foreground = Brushes.DimGray, Margin = new Thickness(0, 6, 0, 0),
+                Text = "The export holds the logs, your settings and version information; no maps and no game files. Maps are rebuilt from the main window.",
+            });
+        }
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Loot Goblins Map " + Tracker.App.AppEnvironment.Version, Foreground = Brushes.Gray, Margin = new Thickness(0, 12, 0, 0),
+        });
         ShowProblems(current.Problems.Concat(hotkeyProblems).ToList(), saved: false);
 
         Content = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = panel };
@@ -127,6 +171,8 @@ internal sealed class SettingsWindow : Window
             LayerDownHotkey = _layerDown.Text.Trim(),
             SettingsHotkey = _settings.Text.Trim(),
             ToggleOverlayHotkey = _toggle.Text.Trim(),
+            MarkFeedbackHotkey = _mark.Text.Trim(),
+            Theme = _theme.SelectedItem as string ?? "parchment",
             ControllerChordEnabled = _chordEnabled.IsChecked == true,
             FullMapControllerChord = _chord.Text.Trim(),
         };
@@ -140,6 +186,7 @@ internal sealed class SettingsWindow : Window
         _layerDown.Text = settings.LayerDownHotkey;
         _settings.Text = settings.SettingsHotkey;
         _toggle.Text = settings.ToggleOverlayHotkey;
+        _mark.Text = settings.MarkFeedbackHotkey;
         _chord.Text = settings.FullMapControllerChord;
 
         var hotkeyProblems = _apply(settings);

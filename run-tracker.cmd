@@ -1,7 +1,11 @@
 @echo off
-rem Starts the live tracker (never elevated; it refuses to run as administrator).
+rem Development: builds and starts the app (never elevated; it refuses to run as administrator)
+rem with the repository's config.json, so maps come from out\ and its own data goes to work\appdata.
 rem Uses the .NET 10 SDK in deps\dotnet when present, otherwise the one on PATH.
-rem Extra arguments are passed through, e.g.  .\run-tracker.cmd --replay work\replay_path.txt
+rem Extra arguments are passed through, e.g.
+rem   .\run-tracker.cmd --overlay
+rem   .\run-tracker.cmd --debug --replay work\replay_path.txt
+rem   .\run-tracker.cmd --probe ^| more
 setlocal
 set "ROOT=%~dp0"
 set "DOTNET=dotnet"
@@ -14,4 +18,4 @@ if errorlevel 1 (
   echo Build failed.
   exit /b 1
 )
-"%DOTNET%" "%ROOT%src\Tracker\bin\Release\net10.0-windows\Tracker.dll" --config "%ROOT%config.json" %*
+"%DOTNET%" "%ROOT%src\Tracker\bin\Release\net10.0-windows\LootGoblinsMap.dll" --config "%ROOT%config.json" %*

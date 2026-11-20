@@ -24,6 +24,8 @@ public sealed class Marker
     public bool Unresolved;
     public List<string> Notes = new();
     public bool Unused;
+    /// <summary>Placed on the nearest layer by height because no navmesh polygon is within reach of it.</summary>
+    public bool OffMesh;
     public string FromMap;
     public bool Resolved;
 }
@@ -118,6 +120,10 @@ public static class Markers
                 m.Layer = best.Layer;
                 m.DistToLayerPolyM = bestHoriz;
             }
+            else if (!m.Unused && m.Type != MapDocument.BonfireType)
+            {
+                PlaceOffMesh(m, faces);
+            }
         }
     }
 
@@ -203,5 +209,42 @@ public static class Markers
             best = Math.Min(best, Geometry2D.DistancePointToPolyXZ(p, f.Vertices));
         }
         return best;
+    }
+
+    /// <summary>
+    /// A real treasure with no walkable polygon within reach (it lies on a ledge, a roof or a
+    /// spot the navigation data does not cover) still belongs on the map. It is put on the layer
+    /// of the polygon nearest to it in height, looking outwards from 40 m until something is found.
+    /// </summary>
+    private static void PlaceOffMesh(Marker m, List<WorldFace> faces)
+    {
+        for (float radius = 40f; radius <= 2560f; radius *= 2)
+        {
+            WorldFace nearest = null;
+            float bestVertical = float.MaxValue, bestHorizontal = float.MaxValue;
+            foreach (var f in faces)
+            {
+                if (m.World.X < f.MinX - radius || m.World.X > f.MaxX + radius ||
+                    m.World.Z < f.MinZ - radius || m.World.Z > f.MaxZ + radius)
+                    continue;
+                float horizontal = Geometry2D.DistancePointToPolyXZ(m.World, f.Vertices);
+                if (horizontal > radius)
+                    continue;
+                float vertical = m.World.Y < f.MinY ? f.MinY - m.World.Y : m.World.Y > f.MaxY ? m.World.Y - f.MaxY : 0f;
+                if (vertical < bestVertical - 0.01f || (MathF.Abs(vertical - bestVertical) <= 0.01f && horizontal < bestHorizontal))
+                {
+                    bestVertical = vertical;
+                    bestHorizontal = horizontal;
+                    nearest = f;
+                }
+            }
+            if (nearest == null)
+                continue;
+            m.Layer = nearest.Layer;
+            m.DistToLayerPolyM = bestHorizontal;
+            m.OffMesh = true;
+            m.Notes.Add($"no walkable polygon within reach; shown on the layer nearest in height ({bestVertical:F1} m above or below, {bestHorizontal:F1} m to the side)");
+            return;
+        }
     }
 }

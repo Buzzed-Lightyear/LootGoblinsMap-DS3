@@ -69,11 +69,14 @@ public sealed class ArchiveSet : IDisposable
 {
     private readonly List<Ds3Archive> _archives = new();
 
-    public static ArchiveSet OpenDarkSouls3(string gameDataDir)
+    public static ArchiveSet OpenDarkSouls3(string gameDataDir, IEnumerable<string> exclude = null)
     {
+        var skipped = new HashSet<string>(exclude ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
         var set = new ArchiveSet();
         foreach (var (name, key) in ArchiveKeys.DarkSouls3)
         {
+            if (skipped.Contains(name))
+                continue;
             if (File.Exists(Path.Combine(gameDataDir, name + ".bhd")) &&
                 File.Exists(Path.Combine(gameDataDir, name + ".bdt")))
             {

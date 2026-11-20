@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.IO;
 using MapCore;
+using Tracker.App;
 using Tracker.Rendering;
 using Tracker.Sources;
 
@@ -15,29 +16,49 @@ internal sealed class TrackerCore : IDisposable
     private MapData? _watchedMap;
     private IReadOnlyDictionary<int, bool>? _appliedFlags;
 
+    public AppEnvironment Env { get; }
     public TrackingSession Session { get; }
     public SamplePump? Pump { get; }
     public IPositionSource Source { get; }
     public MapRenderer Renderer { get; } = new();
     public TrackerSettings Settings { get; private set; }
-    public string SettingsPath { get; }
-    public string ConfigPath { get; }
     public LiveCheckLog Log { get; }
     public string SourceLabel { get; }
     public bool IsReplay => Source is ReplaySource;
 
+    /// <summary>Goes up each time the settings are replaced, so views know to redraw.</summary>
+    public int SettingsVersion { get; private set; }
+
     /// <param name="startPump">False for the windowless modes, which step the source themselves so a run is repeatable.</param>
-    public TrackerCore(MapSet maps, Config config, string configPath, IPositionSource source, string sourceLabel,
-                       string settingsPath, string logPath, bool startPump = true)
+    public TrackerCore(AppEnvironment env, IPositionSource source, string sourceLabel, bool startPump = true)
     {
-        ConfigPath = configPath;
+        Env = env;
         Source = source;
         SourceLabel = sourceLabel;
-        SettingsPath = settingsPath;
-        Settings = TrackerSettings.Load(settingsPath);
+        var config = env.BuildConfig();
+        var maps = MapSet.Load(env.MapsDir, config.MapId);
+        Settings = TrackerSettings.Load(env.SettingsPath);
         Session = new TrackingSession(maps, config.MapId, config.Orientation);
-        Log = new LiveCheckLog(logPath);
+        Log = new LiveCheckLog(env.LiveLogPath);
+        Renderer.Theme = Theme.Load(env.ThemesDir, Settings.Theme);
         Pump = startPump ? new SamplePump(source) : null;
+    }
+
+    public static TrackerCore ForApp(AppEnvironment env, IPositionSource source, string sourceLabel) => new(env, source, sourceLabel);
+
+    public void ReplaceSettings(TrackerSettings settings)
+    {
+        Settings = settings;
+        SettingsVersion++;
+        Renderer.Theme = Theme.Load(Env.ThemesDir, settings.Theme);
+        try
+        {
+            settings.Save(Env.SettingsPath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            settings.Problems.Add("settings could not be saved: " + ex.Message);
+        }
     }
 
     /// <summary>
@@ -53,27 +74,6 @@ internal sealed class TrackerCore : IDisposable
         var events = Session.DrainEvents();
         Log.Append(events);
         return events;
-    }
-
-    /// <summary>The per-user settings file: under the user's application data, never in the repository.</summary>
-    public static string DefaultSettingsPath() =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "LootGoblinsMap", "settings.json");
-
-    /// <summary>Goes up each time the settings are replaced, so views know to redraw.</summary>
-    public int SettingsVersion { get; private set; }
-
-    public void ReplaceSettings(TrackerSettings settings)
-    {
-        Settings = settings;
-        SettingsVersion++;
-        try
-        {
-            settings.Save(SettingsPath);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            settings.Problems.Add("settings could not be saved: " + ex.Message);
-        }
     }
 
     /// <summary>Takes the newest reading, follows a map change, applies flag states and writes the test log.</summary>
@@ -148,6 +148,8 @@ internal static class Readout
 
         var (left, total) = session.TreasureCount();
         lines.Add($"items    {left} of {total} left on this map");
+        if (f.UnknownMapId != null)
+            lines.Add($"WARNING  unsupported game build: map id read as {f.UnknownMapId}");
         lines.Add("view     " + session.Transform.Orientation);
         return lines;
     }
@@ -178,4 +180,13 @@ internal static class Readout
             _ => null,
         };
     }
+
+    /// <summary>
+    /// A standing warning that does not replace the map: the game build is not a known one, so the
+    /// map is chosen by position, which cannot tell every pair of maps apart.
+    /// </summary>
+    public static string? Warning(TrackingSession session) =>
+        session.Current.UnknownMapId != null
+            ? "Unsupported game version: map chosen by position"
+            : null;
 }

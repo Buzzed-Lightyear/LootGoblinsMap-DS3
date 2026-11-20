@@ -44,6 +44,9 @@ public static class ItemCategories
     public const string Key = "key";
     public const string Ring = "ring";
     public const string Weapon = "weapon";
+    public const string Shield = "shield";
+    public const string Catalyst = "catalyst";
+    public const string Ammo = "ammo";
     public const string Armor = "armor";
     public const string Spell = "spell";
     public const string Upgrade = "upgrade";
@@ -52,13 +55,16 @@ public static class ItemCategories
     public const string Unknown = "unknown";
 
     /// <summary>All categories, most notable first: a marker with several items takes the first that applies.</summary>
-    public static readonly IReadOnlyList<string> All = new[] { Key, Ring, Weapon, Armor, Spell, Upgrade, Soul, Consumable, Unknown };
+    public static readonly IReadOnlyList<string> All = new[] { Key, Ring, Weapon, Shield, Catalyst, Armor, Spell, Upgrade, Soul, Ammo, Consumable, Unknown };
 
     public static readonly IReadOnlyDictionary<string, string> DisplayNames = new Dictionary<string, string>
     {
         [Key] = "Key items",
         [Ring] = "Rings",
         [Weapon] = "Weapons",
+        [Shield] = "Shields",
+        [Catalyst] = "Catalysts",
+        [Ammo] = "Ammunition",
         [Armor] = "Armor",
         [Spell] = "Spells",
         [Upgrade] = "Upgrade materials",

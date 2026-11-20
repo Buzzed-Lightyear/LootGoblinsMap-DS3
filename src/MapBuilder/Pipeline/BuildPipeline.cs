@@ -231,6 +231,7 @@ public static class BuildPipeline
                 Flag = m.Flag,
                 Unresolved = m.Unresolved,
                 Unused = m.Unused,
+                OffMesh = m.OffMesh,
                 FromMap = m.FromMap,
                 Notes = m.Notes,
             }).ToList(),

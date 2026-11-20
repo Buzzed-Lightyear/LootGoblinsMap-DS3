@@ -21,7 +21,8 @@ internal static class Headless
     /// <paramref name="view"/>: "follow" or "fit" (the debug panel), "minimap" or "full" (the overlay,
     /// drawn over a stand-in backdrop of the given size).
     /// </summary>
-    public static string RenderReplay(TrackerCore core, string pngPath, string view, double zoom, int width, int height, int? shownLayer)
+    public static string RenderReplay(TrackerCore core, string pngPath, string view, double zoom, int width, int height, int? shownLayer,
+                                      string? banner = null, bool readout = true)
     {
         var session = core.Session;
         var source = (ReplaySource)core.Source;
@@ -67,15 +68,25 @@ internal static class Headless
                 // A stand-in for the game picture, so the translucent panel is judged against something.
                 var backdrop = new LinearGradientBrush(Color.FromRgb(0x4a, 0x52, 0x4a), Color.FromRgb(0x1d, 0x1f, 0x26), 60);
                 dc.DrawRectangle(backdrop, null, new Rect(0, 0, width, height));
-                var state = new OverlayState { FullMap = view == "full", ShownLayer = shownLayer };
+                var state = new OverlayState { FullMap = view == "full", ShownLayer = shownLayer, Banner = banner };
                 OverlayView.Draw(dc, core, state, new ViewState { Follow = true }, new ViewState { FitToWindow = true }, width, height, 1.0);
             }
             else
             {
-                var overlay = Readout.Lines(session);
-                overlay.Add($"replay   {source.Count} positions, {session.Trail.Count(p => p.HasValue)} trail points");
+                List<string>? overlay = null;
+                if (readout)
+                {
+                    overlay = Readout.Lines(session);
+                    overlay.Add($"replay   {source.Count} positions, {session.Trail.Count(p => p.HasValue)} trail points");
+                }
                 var viewState = new ViewState { FitToWindow = view == "fit", Zoom = zoom };
-                var style = new RenderStyle { Opaque = true, LabelCount = 10, Settings = core.Settings, Title = null };
+                var style = new RenderStyle { Opaque = true, Paper = true, LabelCount = 10, Settings = core.Settings, Title = null };
+                if (!readout)
+                {
+                    style.Legend = true;
+                    style.LabelCount = -1;
+                    style.Title = session.Map.Name;
+                }
                 core.Renderer.Render(dc, new Rect(0, 0, width, height), session, viewState, style, Readout.Message(session), overlay);
             }
         }

@@ -107,6 +107,9 @@ public sealed class MapDocument
         /// </summary>
         public bool Unused { get; set; }
 
+        /// <summary>The marker lies where there is no walkable polygon within reach; its layer is the nearest one by height.</summary>
+        public bool OffMesh { get; set; }
+
         /// <summary>Set when the marker is defined in another map's file but stands on this map's floor.</summary>
         public string FromMap { get; set; }
 

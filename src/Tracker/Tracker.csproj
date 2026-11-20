@@ -1,8 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Live tracker: an ordinary desktop window that reads the player position from the running
-       game (read-only) and shows it on the High Wall map. No NuGet packages; the only
-       third-party code is the source-vendored SoulMemory subset under ThirdParty/. -->
+  <!-- The app: LootGoblinsMap.exe. An ordinary desktop program that builds the maps from the
+       user's own game files (the builder is linked in), reads the player position from the
+       running game (read-only) and shows it on the map, as an overlay or in a debug window.
+       No NuGet packages; the only third-party code is vendored source (see THIRD-PARTY-NOTICES.md)
+       and one bundled font. -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
@@ -10,17 +12,50 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>Tracker</RootNamespace>
-    <AssemblyName>Tracker</AssemblyName>
+    <AssemblyName>LootGoblinsMap</AssemblyName>
     <StartupObject>Tracker.Program</StartupObject>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Product>Loot Goblins Map</Product>
+    <Description>Unofficial read-only loot map overlay for Dark Souls III</Description>
+    <!-- A release build is stamped with the git tag: -p:Version=0.1.0-alpha.1 -->
+    <Version>0.0.0-dev</Version>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <!-- The builder is a command-line program of its own; here it is used as a library. -->
+    <ValidateExecutableReferencesMatchSelfContained>false</ValidateExecutableReferencesMatchSelfContained>
+  </PropertyGroup>
+
+  <!-- Publishing for a runtime (dotnet publish -r win-x64) makes the packaged app: one
+       self-contained executable that needs no .NET installed. -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType>embedded</DebugType>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="../MapCore/MapCore.csproj" />
+    <ProjectReference Include="../MapBuilder/MapBuilder.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- EB Garamond (SIL Open Font License), loaded from the Fonts folder next to the program. -->
+    <Content Include="Fonts\EBGaramond-Medium.ttf" CopyToOutputDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    <Content Include="Fonts\OFL.txt" CopyToOutputDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
   </ItemGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="Tracker.Tests" />
   </ItemGroup>
+
+  <!-- The builder's own launcher and its settings are not part of the packaged app. -->
+  <Target Name="RemoveBuilderLauncher" AfterTargets="Publish">
+    <ItemGroup>
+      <BuilderLeftover Include="$(PublishDir)MapBuilder.exe;$(PublishDir)MapBuilder.runtimeconfig.json;$(PublishDir)MapBuilder.deps.json;$(PublishDir)MapBuilder.pdb;$(PublishDir)MapCore.pdb" />
+    </ItemGroup>
+    <Delete Files="@(BuilderLeftover)" />
+  </Target>
 
 </Project>

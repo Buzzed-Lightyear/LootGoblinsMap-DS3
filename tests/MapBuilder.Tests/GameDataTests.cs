@@ -98,7 +98,8 @@ public class GameDataTests
         var text = new GameText();
         text.AddFmg(10, BuildFmg((500, "Test Tonic"), (510, "Test Key"), (520, "Test Shard"), (530, "Test Spell Scroll"), (540, "Soul of a Test Subject")));
         text.AddFmg(250, BuildFmg((550, "Late Addition Tonic"), (500, "  "), (9999, null)));   // DLC file: adds one, blank entries hide nothing
-        text.AddFmg(11, BuildFmg((2000000, "Test Sword"), (2000100, "Sharp Test Sword")));
+        text.AddFmg(11, BuildFmg((2000000, "Test Sword"), (2000100, "Sharp Test Sword"), (2100000, "Test Shield"), (2200000, "Test Wand"),
+                                 (2300000, "Test Arrow"), (2400000, "Test Bolt"), (2900000, "Test Oddity")));
         text.AddFmg(12, BuildFmg((70000, "Test Helm")));
         text.AddFmg(13, BuildFmg((300, "Test Ring"), (301, "Test Ring+1")));
         text.AddFmg(19, BuildFmg((7000, "Test Keep"), (7010, "Test Annex"), (7100, "Test Cellar")));
@@ -118,7 +119,70 @@ public class GameDataTests
             BonfireRow(2, 7001951, 17000002, 900101, 700002),
             BonfireRow(3, 7011950, 17010001, 900200, 0),
             BonfireRow(4, 7101950, 17100001, 999999, 0)));
-        return new ItemResolver(lotParam, goods, effects, bonfires, Text());
+        // The weapon table: the game files shields, catalysts and ammunition under "weapon" and tells them apart by a category byte.
+        var weapons = ParamFile.Read(BuildParam("EQUIP_PARAM_WEAPON_ST", ParamLayouts.Weapon.RowSize,
+            WeaponRow(2000000, 0), WeaponRow(2100000, 12), WeaponRow(2200000, 8), WeaponRow(2300000, 13), WeaponRow(2400000, 14)));
+        return new ItemResolver(lotParam, goods, effects, bonfires, Text(), weapons);
+    }
+
+    private static (int, Action<byte[]>) WeaponRow(int id, byte weaponCategory) => (id, row => row[ParamLayouts.Weapon.WeaponCategory] = weaponCategory);
+
+    [TestMethod]
+    public void Lot_WeaponSlotItems_AreSplitIntoWeaponsShieldsCatalystsAndAmmunition()
+    {
+        var resolver = Resolver(Lot(6100, 1, (2000000, Weapon, 1000, 1)), Lot(6110, 2, (2100000, Weapon, 1000, 1)),
+                                Lot(6120, 3, (2200000, Weapon, 1000, 1)), Lot(6130, 4, (2300000, Weapon, 1000, 20)),
+                                Lot(6140, 5, (2400000, Weapon, 1000, 10)),
+                                Lot(6150, 6, (2100203, Weapon, 1000, 1)),    // an infused, reinforced shield: still a shield
+                                Lot(6160, 7, (2900000, Weapon, 1000, 1)));   // not in the table: a plain weapon
+        string Category(int lot) => resolver.Resolve(new[] { lot }).Items.Single().Category;
+        Assert.AreEqual(ItemCategories.Weapon, Category(6100));
+        Assert.AreEqual(ItemCategories.Shield, Category(6110));
+        Assert.AreEqual(ItemCategories.Catalyst, Category(6120));
+        Assert.AreEqual(ItemCategories.Ammo, Category(6130));
+        Assert.AreEqual(ItemCategories.Ammo, Category(6140));
+        Assert.AreEqual(ItemCategories.Shield, Category(6150));
+        Assert.AreEqual(ItemCategories.Weapon, Category(6160));
+
+        // Every category has a name to show and a place in the fixed order.
+        foreach (string category in new[] { ItemCategories.Shield, ItemCategories.Catalyst, ItemCategories.Ammo })
+        {
+            CollectionAssert.Contains(ItemCategories.All.ToList(), category);
+            Assert.IsFalse(string.IsNullOrEmpty(ItemCategories.DisplayNames[category]));
+        }
+    }
+
+    [TestMethod]
+    public void Marker_WithNoFloorInReach_IsShownOnTheLayerNearestInHeight()
+    {
+        // Two storeys, 8 m apart, and three markers far out to the side of them.
+        var faces = new List<WorldFace>();
+        for (int i = 0; i < 5; i++)
+        {
+            var lower = Quad(i * 4, 0, 4, 0);
+            lower.Layer = 0;
+            var upper = Quad(i * 4, 0, 4, 8);
+            upper.Layer = 1;
+            faces.Add(lower);
+            faces.Add(upper);
+        }
+        var onFloor = new Marker { Type = MapDocument.TreasureType, Name = "on_floor", World = new Vector3(6, 8.2f, 2), ItemLots = { 1 } };
+        var ledge = new Marker { Type = MapDocument.TreasureType, Name = "ledge", World = new Vector3(60, 7, 2), ItemLots = { 2 } };
+        var pit = new Marker { Type = MapDocument.TreasureType, Name = "pit", World = new Vector3(-30, -3, 2), ItemLots = { 3 } };
+        var leftover = new Marker { Type = MapDocument.TreasureType, Name = "leftover", World = new Vector3(60, 7, 2), ItemLots = { 4 }, Unused = true };
+        var bonfire = new Marker { Type = MapDocument.BonfireType, Name = "far_bonfire", World = new Vector3(60, 7, 2) };
+
+        Markers.AssignLayers(new List<Marker> { onFloor, ledge, pit, leftover, bonfire }, faces);
+
+        Assert.AreEqual(1, onFloor.Layer);
+        Assert.IsFalse(onFloor.OffMesh);
+        Assert.AreEqual(1, ledge.Layer, "7 m up is nearest to the upper storey");
+        Assert.IsTrue(ledge.OffMesh);
+        Assert.IsTrue(ledge.Notes.Any(n => n.Contains("no walkable polygon")));
+        Assert.AreEqual(0, pit.Layer, "3 m down is nearest to the lower storey");
+        Assert.IsTrue(pit.OffMesh);
+        Assert.AreEqual(-1, leftover.Layer, "an unused leftover is not placed");
+        Assert.AreEqual(-1, bonfire.Layer, "a bonfire is never guessed onto a layer");
     }
 
     // ---- param parsing ------------------------------------------------------------------

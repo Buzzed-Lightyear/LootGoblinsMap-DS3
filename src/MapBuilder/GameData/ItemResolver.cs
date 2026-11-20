@@ -30,6 +30,13 @@ public static class ParamLayouts
         public const int GoodsType = 0x3A;       // u8
     }
 
+    public static class Weapon
+    {
+        public const string Name = "EquipParamWeapon";
+        public const int RowSize = 0x260;
+        public const int WeaponCategory = 0xE2;  // u8: 8 catalysts, 12 shields, 13 arrows, 14 bolts; the rest are weapons proper
+    }
+
     public static class SpEffect
     {
         public const string Name = "SpEffectParam";
@@ -75,11 +82,13 @@ public sealed class ItemResolver
     private readonly ParamFile _lots;
     private readonly ParamFile _goods;
     private readonly ParamFile _spEffects;
+    private readonly ParamFile _weapons;
     private readonly GameText _text;
     private readonly Dictionary<int, (int NameId, int LitFlag, int OnlineAreaId)> _bonfires = new();
 
-    public ItemResolver(ParamFile lots, ParamFile goods, ParamFile spEffects, ParamFile bonfires, GameText text)
+    public ItemResolver(ParamFile lots, ParamFile goods, ParamFile spEffects, ParamFile bonfires, GameText text, ParamFile weapons = null)
     {
+        _weapons = weapons;
         _lots = lots;
         _goods = goods;
         _spEffects = spEffects;
@@ -97,8 +106,9 @@ public sealed class ItemResolver
         var goods = ParamLayouts.Checked(regulation, ParamLayouts.Goods.Name, ParamLayouts.Goods.RowSize);
         var spEffects = ParamLayouts.Checked(regulation, ParamLayouts.SpEffect.Name, ParamLayouts.SpEffect.RowSize);
         var bonfires = ParamLayouts.Checked(regulation, ParamLayouts.BonfireWarp.Name, ParamLayouts.BonfireWarp.RowSize);
-        log.WriteLine($"Regulation: {lots.RowCount} item lots, {goods.RowCount} goods, {spEffects.RowCount} effects, {bonfires.RowCount} bonfire rows.");
-        return new ItemResolver(lots, goods, spEffects, bonfires, text);
+        var weapons = ParamLayouts.Checked(regulation, ParamLayouts.Weapon.Name, ParamLayouts.Weapon.RowSize);
+        log.WriteLine($"Regulation: {lots.RowCount} item lots, {goods.RowCount} goods, {spEffects.RowCount} effects, {bonfires.RowCount} bonfire rows, {weapons.RowCount} weapon rows.");
+        return new ItemResolver(lots, goods, spEffects, bonfires, text, weapons);
     }
 
     /// <summary>Name and lit flag of the bonfire with this entity id, if the game lists it.</summary>
@@ -234,7 +244,7 @@ public sealed class ItemResolver
                 if (name != null && level > 0 && _text.Get(TextKind.Weapon, itemId) == null)
                     name += $" +{level}";
                 item.Name = name;
-                item.Category = ItemCategories.Weapon;
+                item.Category = WeaponKind(itemId);
                 break;
             }
             case CategoryProtector:
@@ -251,6 +261,28 @@ public sealed class ItemResolver
                 break;
         }
         return item;
+    }
+
+    /// <summary>
+    /// Everything in the weapon slot is a "weapon" to the game; its weapon category tells shields,
+    /// catalysts (staves, talismans, chimes, flames) and ammunition apart from weapons proper.
+    /// </summary>
+    private string WeaponKind(int itemId)
+    {
+        if (_weapons == null)
+            return ItemCategories.Weapon;
+        // The row of the item itself, else of its base weapon (reinforcement and infusion stripped).
+        if (!_weapons.TryGetRow(itemId, out var row) &&
+            !_weapons.TryGetRow(itemId - itemId % 100, out row) &&
+            !_weapons.TryGetRow(itemId - itemId % 10000, out row))
+            return ItemCategories.Weapon;
+        return row.U8(ParamLayouts.Weapon.WeaponCategory) switch
+        {
+            8 => ItemCategories.Catalyst,
+            12 => ItemCategories.Shield,
+            13 or 14 => ItemCategories.Ammo,
+            _ => ItemCategories.Weapon,
+        };
     }
 
     /// <summary>Goods are split by the game's own goods type; souls are the consumables whose effect grants souls.</summary>

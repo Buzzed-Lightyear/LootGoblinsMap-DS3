@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Threading;
 using MapCore;
+using Tracker.App;
 using Tracker.Memory;
 using Tracker.Sources;
 
@@ -17,12 +18,13 @@ namespace Tracker.Overlay;
 internal sealed class OverlayController
 {
     private const int WmHotKey = 0x0312;
-    private const int HotFullMap = 1, HotLayerUp = 2, HotLayerDown = 3, HotSettings = 4, HotToggle = 5;
+    private const int HotFullMap = 1, HotLayerUp = 2, HotLayerDown = 3, HotSettings = 4, HotToggle = 5, HotMark = 6;
 
     /// <summary>Redraw interval: 33 ms caps the overlay at 30 frames a second.</summary>
     public const int FrameIntervalMs = 33;
 
     private readonly TrackerCore _core;
+    private readonly AppEnvironment _env;
     private readonly OverlayView _view;
     private readonly OverlayWindow _window;
     private readonly DispatcherTimer _timer;
@@ -33,7 +35,7 @@ internal sealed class OverlayController
     private bool _enabled = true;
     private bool _chordWasHeld;
     private MapData _shownMap;
-    private long _noticeUntilMs;
+    private long _noticeUntilMs, _bannerUntilMs;
     private readonly List<string> _hotkeyProblems = new();
 
     public int Frames { get; private set; }
@@ -41,9 +43,10 @@ internal sealed class OverlayController
     public OverlayWindow Window => _window;
     public OverlayView View => _view;
 
-    public OverlayController(TrackerCore core)
+    public OverlayController(TrackerCore core, AppEnvironment? env = null)
     {
         _core = core;
+        _env = env ?? core.Env;
         _shownMap = core.Session.Map;
         _view = new OverlayView(core);
         _window = new OverlayWindow(_view);
@@ -80,6 +83,7 @@ internal sealed class OverlayController
         yield return (HotLayerDown, "layer down", s.LayerDownHotkey);
         yield return (HotSettings, "settings", s.SettingsHotkey);
         yield return (HotToggle, "show/hide overlay", s.ToggleOverlayHotkey);
+        yield return (HotMark, "mark feedback", s.MarkFeedbackHotkey);
     }
 
     public void RegisterHotkeys()
@@ -100,7 +104,7 @@ internal sealed class OverlayController
 
     private void UnregisterHotkeys()
     {
-        for (int id = HotFullMap; id <= HotToggle; id++)
+        for (int id = HotFullMap; id <= HotMark; id++)
             NativeMethods.RemoveHotKey(_window.Own, id);
     }
 
@@ -139,10 +143,14 @@ internal sealed class OverlayController
             case HotToggle:
                 _enabled = !_enabled;
                 break;
+            case HotMark:
+                _env.MarkFeedback(_core.Session);
+                Notice("marked for feedback");
+                break;
         }
     }
 
-    private void OpenSettings()
+    public void OpenSettings()
     {
         if (_settingsWindow != null)
         {
@@ -155,7 +163,7 @@ internal sealed class OverlayController
             RegisterHotkeys();
             Notice(_hotkeyProblems.Count == 0 ? "settings saved" : "settings saved; some hotkeys are unavailable");
             return _hotkeyProblems;
-        });
+        }, _env);
         _settingsWindow.Closed += (_, _) => _settingsWindow = null;
         _settingsWindow.Show();
     }
@@ -176,9 +184,16 @@ internal sealed class OverlayController
             _shownMap = _core.Session.Map;
             _view.State.ShownLayer = null;
             _view.ResetView();
+            // A brief banner with the new area's name.
+            _view.State.Banner = _shownMap.Name;
+            _bannerUntilMs = _clock.ElapsedMilliseconds + 3500;
         }
+        if (_view.State.Banner != null && _clock.ElapsedMilliseconds > _bannerUntilMs)
+            _view.State.Banner = null;
         if (_view.State.Notice != null && _clock.ElapsedMilliseconds > _noticeUntilMs)
             _view.State.Notice = null;
+        // A standing warning (unsupported game build) shows whenever nothing more recent does.
+        _view.State.Warning = Readout.Warning(_core.Session);
 
         PollController();
 

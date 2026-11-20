@@ -7,10 +7,11 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 namespace Tracker.Tests;
 
 /// <summary>
-/// Proof for hard rule 2 (and rule 5): the tracker and everything it references — its own
-/// source, the vendored SoulMemory subset and the shared MapCore library — declare none of the
-/// banned process APIs, open the game with the read + limited-query mask only, and reference
-/// no networking. Checked twice: on the source text and on the compiled assemblies.
+/// Proof for hard rule 2 (and rules 5 and 6): the app and everything it ships — its own source,
+/// the vendored SoulMemory subset, the shared MapCore library and the map builder that is linked
+/// in since phase 4 — declare none of the banned process APIs, open the game with the read +
+/// limited-query mask only, and reference no networking. Checked twice: on the source text and
+/// on the compiled assemblies.
 /// </summary>
 [TestClass]
 public class ReadOnlyGuaranteeTests
@@ -83,12 +84,12 @@ public class ReadOnlyGuaranteeTests
         throw new InvalidOperationException("Repository root (LootGoblinsMap.slnx) not found above " + AppContext.BaseDirectory);
     }
 
-    /// <summary>Every source file that ends up in the tracker: its own project and the shared library it references.</summary>
+    /// <summary>Every source file that ends up in the app: its own project, the shared library and the map builder.</summary>
     private static List<string> ShippedSourceFiles()
     {
         string root = RepoRoot();
         var files = new List<string>();
-        foreach (string project in new[] { "src/Tracker", "src/MapCore" })
+        foreach (string project in new[] { "src/Tracker", "src/MapCore", "src/MapBuilder" })
         {
             string dir = Path.Combine(root, project);
             files.AddRange(Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories).Where(f =>
@@ -112,19 +113,24 @@ public class ReadOnlyGuaranteeTests
     public void Source_ContainsNoBannedApiName_Anywhere()
     {
         var files = ShippedSourceFiles();
-        Assert.IsTrue(files.Count(f => f.EndsWith(".cs")) >= 20, "expected to find the tracker's source files");
+        Assert.IsTrue(files.Count(f => f.EndsWith(".cs")) >= 60, "expected to find the app's source files");
+        foreach (string project in new[] { "Tracker", "MapCore", "MapBuilder" })
+            Assert.IsTrue(files.Any(f => f.Replace('\\', '/').Contains($"/src/{project}/") && f.EndsWith(".cs")), $"no source found for {project}");
 
         var hits = new List<string>();
         foreach (string file in files)
         {
             // Whole text, comments and docs included: the names must not appear at all.
+            // (The bundled font is the one binary file; it is not code and is skipped.)
+            if (file.EndsWith(".ttf", StringComparison.OrdinalIgnoreCase))
+                continue;
             string text = File.ReadAllText(file);
             foreach (string banned in BannedNames)
                 if (text.Contains(banned, StringComparison.OrdinalIgnoreCase))
                     hits.Add($"{Path.GetRelativePath(RepoRoot(), file)}: {banned}");
         }
 
-        TestContext.WriteLine($"scanned {files.Count} files under src/Tracker and src/MapCore for {BannedNames.Length} banned names: {hits.Count} hits");
+        TestContext.WriteLine($"scanned {files.Count} files under src/Tracker, src/MapCore and src/MapBuilder for {BannedNames.Length} banned names: {hits.Count} hits");
         Assert.AreEqual(0, hits.Count, "banned API names found:\n" + string.Join("\n", hits));
     }
 
@@ -231,7 +237,7 @@ public class ReadOnlyGuaranteeTests
         return ns.Length == 0 ? md.GetString(type.Name) : ns + "." + md.GetString(type.Name);
     }
 
-    /// <summary>Tracker.dll plus every non-framework assembly it references (that is MapCore.dll).</summary>
+    /// <summary>The app's assembly plus every non-framework assembly it references (MapCore.dll and MapBuilder.dll).</summary>
     private static List<AssemblyFacts> ShippedAssemblies()
     {
         string trackerPath = typeof(Tracker.Program).Assembly.Location;
@@ -249,7 +255,7 @@ public class ReadOnlyGuaranteeTests
             foreach (string reference in facts.References)
             {
                 // Framework assemblies (System.*, Presentation*, WindowsBase, …) are Microsoft's; anything
-                // else that sits next to Tracker.dll is ours or vendored and gets inspected too.
+                // else that sits next to the app's assembly is ours or vendored and gets inspected too.
                 string local = Path.Combine(dir, reference + ".dll");
                 if (File.Exists(local) && !IsFramework(reference))
                     pending.Enqueue(local);
@@ -266,8 +272,8 @@ public class ReadOnlyGuaranteeTests
     public void Compiled_TrackerAndItsReferences_ImportOnlyAllowlistedNatives()
     {
         var assemblies = ShippedAssemblies();
-        CollectionAssert.AreEquivalent(new[] { "Tracker.dll", "MapCore.dll" }, assemblies.Select(a => a.Name).ToArray(),
-            "the tracker ships exactly its own assembly and the shared library");
+        CollectionAssert.AreEquivalent(new[] { "LootGoblinsMap.dll", "MapCore.dll", "MapBuilder.dll" }, assemblies.Select(a => a.Name).ToArray(),
+            "the app ships exactly its own assembly, the shared library and the map builder");
 
         foreach (var a in assemblies)
         {
@@ -275,8 +281,9 @@ public class ReadOnlyGuaranteeTests
             foreach (string import in a.Imports)
                 CollectionAssert.Contains(AllowedImports, import, $"{a.Name} imports {import}");
         }
-        CollectionAssert.AreEquivalent(AllowedImports, assemblies.Single(a => a.Name == "Tracker.dll").Imports);
+        CollectionAssert.AreEquivalent(AllowedImports, assemblies.Single(a => a.Name == "LootGoblinsMap.dll").Imports);
         Assert.AreEqual(0, assemblies.Single(a => a.Name == "MapCore.dll").Imports.Count, "the shared library has no native code at all");
+        Assert.AreEqual(0, assemblies.Single(a => a.Name == "MapBuilder.dll").Imports.Count, "the map builder has no native code at all");
     }
 
     [TestMethod]

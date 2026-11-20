@@ -34,7 +34,7 @@ internal sealed class MainWindow : Window
     private int _rotation;
     private bool _syncing;
 
-    public MainWindow(TrackerCore core)
+    public MainWindow(TrackerCore core, Tracker.App.AppEnvironment? env = null)
     {
         _core = core;
         _shownMap = core.Session.Map;
@@ -102,7 +102,7 @@ internal sealed class MainWindow : Window
         rotateRow.Children.Add(rotate);
         rotateRow.Children.Add(_rotationLabel);
         panel.Children.Add(rotateRow);
-        var save = new Button { Content = "Save orientation to config.json", Margin = new Thickness(0, 10, 0, 0), Padding = new Thickness(8, 4, 8, 4), HorizontalAlignment = HorizontalAlignment.Left };
+        var save = new Button { Content = "Save orientation", Margin = new Thickness(0, 10, 0, 0), Padding = new Thickness(8, 4, 8, 4), HorizontalAlignment = HorizontalAlignment.Left };
         save.Click += (_, _) => SaveOrientation();
         panel.Children.Add(save);
         panel.Children.Add(_saveStatus);
@@ -209,8 +209,8 @@ internal sealed class MainWindow : Window
     {
         try
         {
-            ConfigFile.SaveOrientation(_core.ConfigPath, CurrentOrientation);
-            _saveStatus.Text = $"Saved {CurrentOrientation} to {_core.ConfigPath}. Re-run the map builder to turn its PNG/SVG images the same way.";
+            _core.Env.SaveOrientation(CurrentOrientation);
+            _saveStatus.Text = $"Saved {CurrentOrientation}.";
         }
         catch (Exception ex)
         {

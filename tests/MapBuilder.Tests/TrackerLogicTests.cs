@@ -88,7 +88,10 @@ public class TrackerLogicTests
     public void MapSwitch_UnbuiltMap_IsReportedAndTheShownMapStays()
     {
         var (keep, annex) = TwoMaps();
-        var session = new TrackingSession(MapSet.Of(keep, annex), keep.Id, Orientation.Default);
+        var set = MapSet.Of(keep, annex);
+        // The game has a third map that was not built (it has no navmesh, say).
+        set.Index.KnownMapIds.AddRange(new[] { keep.Id, annex.Id, "m99_00_00_00" });
+        var session = new TrackingSession(set, keep.Id, Orientation.Default);
         session.Update(PositionSample.AtMap(new Vector3(10, 0, 4), keep.Id), T0);
 
         var f = session.Update(PositionSample.AtMap(new Vector3(10, 0, 4), "m99_00_00_00"), T0.AddSeconds(1));
@@ -415,7 +418,7 @@ public class TrackerLogicTests
         Assert.IsFalse(settings.ShowCollected, "collected markers are hidden by default");
 
         // No default is a bare letter, digit, arrow or other key the game binds for play.
-        foreach (string text in new[] { settings.FullMapHotkey, settings.LayerUpHotkey, settings.LayerDownHotkey, settings.SettingsHotkey, settings.ToggleOverlayHotkey })
+        foreach (string text in new[] { settings.FullMapHotkey, settings.LayerUpHotkey, settings.LayerDownHotkey, settings.SettingsHotkey, settings.ToggleOverlayHotkey, settings.MarkFeedbackHotkey })
         {
             Assert.IsTrue(Hotkey.TryParse(text, out var hotkey, out _), text);
             bool functionKey = hotkey.VirtualKey is >= 0x70 and <= 0x87;
@@ -462,6 +465,9 @@ public class TrackerLogicTests
         Assert.IsTrue(settings.Problems.Any(p => p.Contains("LayerUpHotkey")));
         Assert.IsTrue(settings.Problems.Any(p => p.Contains("FullMapHotkey") && p.Contains("SettingsHotkey")), "two actions on one shortcut is reported");
         Assert.IsTrue(settings.Problems.Any(p => p.Contains("FullMapControllerChord")));
+        Assert.AreEqual("parchment", settings.Theme, "the themed look is the default");
+        Assert.AreEqual("plain", TrackerSettings.Parse("""{ "theme": "plain" }""").Theme);
+        Assert.AreEqual("parchment", TrackerSettings.Parse("""{ "theme": "a/b:c" }""").Theme, "a theme name is a file name; anything else falls back");
 
         // Broken JSON never stops the tracker: defaults, with the reason.
         var broken = TrackerSettings.Parse("{ this is not json");

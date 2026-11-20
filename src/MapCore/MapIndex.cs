@@ -18,6 +18,20 @@ public sealed class MapIndex
 
     public List<Entry> Maps { get; set; } = new();
 
+    /// <summary>
+    /// Every map id found in the game's archives, built or not. A map id read from memory that is
+    /// not in this list is not a map id at all: the game build is not one the tracker knows.
+    /// </summary>
+    public List<string> KnownMapIds { get; set; } = new();
+
+    /// <summary>Archives the maps were built from (for example "Data1 … Data5, DLC1, DLC2").</summary>
+    public List<string> Archives { get; set; } = new();
+
+    public bool IsKnownMapId(string mapId) =>
+        mapId != null && (KnownMapIds.Count == 0
+            ? Maps.Any(m => string.Equals(m.Id, mapId, StringComparison.OrdinalIgnoreCase))
+            : KnownMapIds.Contains(mapId, StringComparer.OrdinalIgnoreCase));
+
     public sealed class Entry
     {
         public string Id { get; set; }

@@ -21,6 +21,9 @@ public sealed class Config
     /// <summary>Folder name of the game text language under /msg (item and place names).</summary>
     public string Language { get; set; } = "engus";
 
+    /// <summary>Archives to leave unopened even when present (for example "DLC1, DLC2" to build as an install without the DLC would).</summary>
+    public string ExcludeArchives { get; set; } = "";
+
     /// <summary>Also write a PNG and SVG per layer. The tracker does not need them.</summary>
     public bool WriteLayerImages { get; set; } = true;
 
