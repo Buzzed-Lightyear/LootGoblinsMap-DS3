@@ -688,9 +688,11 @@ public sealed class MapRenderer
             }
         }
 
+        Rect? playerBox = null;
         if (frame.HasPosition)
         {
             var s = m.Transform(new Point(frame.PixelX, frame.PixelY));
+            playerBox = new Rect(s.X - theme.PlayerSize - 4, s.Y - theme.PlayerSize - 4, 2 * theme.PlayerSize + 8, 2 * theme.PlayerSize + 8);
             if (frame.State == TrackState.Tracking)
                 dc.DrawEllipse(look.Player, look.PlayerRing, s, theme.PlayerSize, theme.PlayerSize);   // smaller than a bonfire marker, so one stays visible underneath
             else
@@ -698,7 +700,7 @@ public sealed class MapRenderer
         }
 
         if (style.LabelCount != 0)
-            DrawLabels(dc, bounds, shape, drawn, style.LabelCount, pixelsPerDip);
+            DrawLabels(dc, bounds, shape, drawn, style.LabelCount, pixelsPerDip, playerBox);
         if (style.Legend)
             DrawLegend(dc, bounds, session, settings, pixelsPerDip);
         if (!string.IsNullOrEmpty(style.Title))
@@ -748,9 +750,12 @@ public sealed class MapRenderer
 
     /// <summary>Names the nearest markers. A label that would cover another label, or leave the panel, is left out, so what is shown stays readable.</summary>
     private void DrawLabels(DrawingContext dc, Rect bounds, Geometry shape, List<(MapDocument.MarkerInfo Marker, Point At, float Distance)> markers,
-                            int count, double pixelsPerDip)
+                            int count, double pixelsPerDip, Rect? keepClear)
     {
+        // A label never covers the player's dot.
         var placed = new List<Rect>();
+        if (keepClear is { } clear)
+            placed.Add(clear);
         double gap = Math.Max(_theme.ItemIconSize, 6) + 5;
         int shown = 0;
         foreach (var (marker, at, _) in markers.OrderBy(x => x.Distance))
@@ -765,18 +770,21 @@ public sealed class MapRenderer
 
             // To the right of the marker; to the left when that would leave the panel.
             var box = new Rect(at.X + gap, at.Y - h / 2, w, h);
-            if (!Fits(box))
+            if (!Fits(box) || Taken(box))
                 box = new Rect(at.X - gap - w, at.Y - h / 2, w, h);
-            if (!Fits(box))
-                continue;
-            var padded = Rect.Inflate(box, 2, 2);
-            if (placed.Any(p => p.IntersectsWith(padded)))
+            if (!Fits(box) || Taken(box))
                 continue;
 
             placed.Add(box);
             dc.DrawRoundedRectangle(_look.LabelBack, null, box, 3, 3);
             dc.DrawText(text, new Point(box.X + 5, box.Y + 2));
             shown++;
+        }
+
+        bool Taken(Rect box)
+        {
+            var padded = Rect.Inflate(box, 2, 2);
+            return placed.Any(p => p.IntersectsWith(padded));
         }
 
         bool Fits(Rect box) =>
