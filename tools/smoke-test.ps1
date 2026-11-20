@@ -2,6 +2,10 @@
 # next to it, and a replay on the made-up demo map rendered to a picture in both themes.
 #
 #   powershell -ExecutionPolicy Bypass -File tools\smoke-test.ps1 -AppDir <unzipped folder> -Version 0.1.0-alpha.1
+#
+# The app refuses to run as administrator. GitHub's hosted runners are administrators, so
+# there this script checks the version, the shipped files and that the app does refuse; the
+# rendering is covered by the test suite on the runner and by this script on a normal account.
 param(
     [Parameter(Mandatory = $true)][string]$AppDir,
     [string]$Version = "",
@@ -15,10 +19,10 @@ if ($WorkDir -eq "") { $WorkDir = Join-Path ([System.IO.Path]::GetTempPath()) ("
 if (Test-Path $WorkDir) { Remove-Item -Recurse -Force $WorkDir }
 New-Item -ItemType Directory -Force $WorkDir | Out-Null
 
-function Invoke-App([string[]]$Arguments) {
-    # A windowed program: piping its output makes the shell wait for it and collect what it prints.
+# A windowed program: piping its output makes the shell wait for it and collect what it prints.
+function Invoke-App([string[]]$Arguments, [int]$ExpectedExit = 0) {
     $output = & $exe @Arguments | Out-String
-    if ($LASTEXITCODE -ne 0) { throw "LootGoblinsMap.exe $($Arguments -join ' ') exited with $LASTEXITCODE`n$output" }
+    if ($LASTEXITCODE -ne $ExpectedExit) { throw "LootGoblinsMap.exe $($Arguments -join ' ') exited with $LASTEXITCODE, expected $ExpectedExit`n$output" }
     return $output
 }
 
@@ -37,6 +41,20 @@ Check "reports a version" ($reported -match '^Loot Goblins Map \d+\.\d+\.\d+')
 if ($Version -ne "") { Check "the version is $Version" ($reported -eq "Loot Goblins Map $Version") }
 
 $data = Join-Path $WorkDir "data"
+$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+$elevated = (New-Object Security.Principal.WindowsPrincipal $identity).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+
+if ($elevated) {
+    Write-Host "  this account is an administrator: the app must refuse to do anything more"
+    # Exit code 3 is the app's "I am elevated and will not continue"; Invoke-App throws on any other.
+    $null = Invoke-App @("--data", $data, "--make-demo") 3
+    Check "refuses to run as administrator (exit code 3)" $true
+    Check "  and wrote nothing" (-not (Test-Path -LiteralPath (Join-Path $data "maps")))
+    if ($failed) { Write-Host "smoke test: FAILED"; exit 1 }
+    Write-Host "smoke test: OK (reduced: version, files and the refusal to run elevated; rendering needs a normal account)"
+    exit 0
+}
+
 $demo = Invoke-App @("--data", $data, "--make-demo")
 Check "writes the demo maps" (Test-Path -LiteralPath (Join-Path $data "maps\index.json"))
 Check "the demo walks follow the floor" (-not $demo.Contains("straight line"))

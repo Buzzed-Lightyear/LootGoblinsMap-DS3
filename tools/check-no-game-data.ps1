@@ -7,7 +7,7 @@
 #
 # A file fails when it
 #   - has a game data extension (archives, maps, navigation, params, text, textures, saves);
-#   - is one of the builder's output files (map.json, navpoly.bin, index.json, build_report.md);
+#   - is one of the builder's output files (map.json, navpolys.bin, index.json, build_report.md);
 #   - sits under out/ or work/ (git only);
 #   - is an image outside the folders reserved for pictures of the synthetic demo map;
 #   - is larger than 2 MB (the one exception: the released executable itself).
@@ -23,7 +23,7 @@ $gameExtensions = @(
     ".dds", ".fsb", ".fev", ".bik", ".bk2", ".entryfilelist", ".sl2", ".btl", ".btab", ".nvmbnd", ".ngp", ".mcp", ".mcg",
     ".ccm", ".loc", ".gfx", ".sib", ".clm2", ".btpb", ".ltl"
 )
-$builderOutputs = @("map.json", "navpoly.bin", "index.json", "build_report.md")
+$builderOutputs = @("map.json", "navpolys.bin", "index.json", "build_report.md")
 $imageExtensions = @(".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tga", ".tif", ".tiff", ".ico", ".svg")
 $imageFolders = @("docs/images/", "site/images/")
 $maxBytes = 2MB
