@@ -16,7 +16,8 @@
 //
 // Local modification (see PROVENANCE.md): reads go through IMemorySource instead of a
 // System.Diagnostics.Process handle, every member that changed the target process was
-// removed, and only the read helpers the tracker uses were kept.
+// removed, and only the read helpers the tracker uses were kept (ReadInt32, ReadUInt32,
+// ReadInt64, ReadByte, ReadFloat, Append, Copy, CreatePointerFromAddress).
 
 using System;
 using System.Collections.Generic;
@@ -50,6 +51,36 @@ public class Pointer
     }
 
     public bool IsInitialized => _initialized;
+
+    public Pointer Copy()
+    {
+        var p = new Pointer();
+        p.Initialize(Memory!, Is64Bit, BaseAddress, Offsets.ToArray());
+        return p;
+    }
+
+    public Pointer CreatePointerFromAddress(long? offset = null)
+    {
+        var copy = Copy();
+        var offsets = Offsets.ToList();
+        if (offset.HasValue)
+        {
+            offsets.Add(offset.Value);
+        }
+
+        offsets.Add(0);
+
+        copy.BaseAddress = ResolveOffsets(offsets);
+        copy.Offsets.Clear();
+        return copy;
+    }
+
+    public Pointer Append(params long[] offsets)
+    {
+        var copy = Copy();
+        copy.Offsets.AddRange(offsets);
+        return copy;
+    }
 
     private long ResolveOffsets(List<long> offsets)
     {
@@ -132,6 +163,20 @@ public class Pointer
         Span<byte> b = stackalloc byte[4];
         TryReadBytes(b, offset);
         return BitConverter.ToInt32(b);
+    }
+
+    public uint ReadUInt32(long? offset = null)
+    {
+        Span<byte> b = stackalloc byte[4];
+        TryReadBytes(b, offset);
+        return BitConverter.ToUInt32(b);
+    }
+
+    public byte ReadByte(long? offset = null)
+    {
+        Span<byte> b = stackalloc byte[1];
+        TryReadBytes(b, offset);
+        return b[0];
     }
 
     public long ReadInt64(long? offset = null)

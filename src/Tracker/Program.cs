@@ -41,7 +41,8 @@ public static class Program
         CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
         CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
         try { Console.OutputEncoding = System.Text.Encoding.UTF8; } catch (IOException) { /* no console attached */ }
-        bool headless = HasFlag(args, "--png") || HasFlag(args, "--make-path") || HasFlag(args, "--probe") || HasFlag(args, "--help");
+        bool headless = HasFlag(args, "--png") || HasFlag(args, "--make-path") || HasFlag(args, "--probe") || HasFlag(args, "--help") ||
+                        HasFlag(args, "--overlay-check");
         try
         {
             return Run(args, headless);
@@ -66,6 +67,16 @@ public static class Program
         {
             Fail(headless, "The tracker is running as administrator and will not continue. Start it from a normal (non-elevated) prompt.");
             return 3;
+        }
+
+        if (HasFlag(args, "--overlay-check"))
+        {
+            using var report = new StringWriter();
+            int code = Headless.OverlayCheck(report);
+            Console.Write(report.ToString());
+            if (Option(args, "--report") is { } reportPath)
+                File.WriteAllText(reportPath, report.ToString());
+            return code;
         }
 
         string configPath = Option(args, "--config") ?? FindConfig()

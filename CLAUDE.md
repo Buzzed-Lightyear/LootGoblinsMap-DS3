@@ -1,37 +1,27 @@
-# Hard rules, phase 2 (copied from BRIEF-PHASE2.md — binding for all work in this repo)
+# Rules for all work in this repo
 
-1. Never write, move, rename, delete or unpack anything inside the game path. Take a snapshot with `mapbuilder snapshot` before any other step and again at the end, and diff them. Any difference is a failure: stop and report it.
-2. The tracker only ever reads the game process. Open it with `PROCESS_VM_READ | PROCESS_QUERY_LIMITED_INFORMATION` and nothing more. No `WriteProcessMemory`, `VirtualAllocEx`, `VirtualProtectEx`, `CreateRemoteThread`, DLL injection or hooks, anywhere in the code you ship. If a library you vendor has write or inject code paths, leave those files out.
-3. Never launch, close, focus or send input to the game or Steam. I start the game myself.
-4. Do not run the tracker elevated. If reading fails with access denied, stop and report it instead.
-5. The tracker makes no network connections.
-6. Dependencies come from source in their official repositories, pinned to a commit. Microsoft packages are the only allowed NuGet packages.
-7. Do not commit, push or publish game data or anything derived from it.
+Consolidated from BRIEF-PHASE3.md. This supersedes the phase 1 and phase 2 rules that used to be
+in this file, including "High Wall only" and "do not commit".
 
-Phase 2 environment (from BRIEF-PHASE2.md):
+1. Never write, move, rename, delete or unpack anything inside the game path. Snapshot it before any other step and again at the end. Compare everything except the eleven files the phase 2 report showed the running game's mods rewriting (`Game/logs/*`, `Game/dxgi.ini`, `Game/SoulsUnsqueezed.ini`, `Game/Version/*.ini`). Any other difference is a failure: stop and report it.
+2. The tracker only ever reads the game process, with the same access mask as phase 2 (`PROCESS_VM_READ | PROCESS_QUERY_LIMITED_INFORMATION`). Every name on the banned list in `ReadOnlyGuaranteeTests` stays banned.
+3. Phase 3 may add native calls for these purposes only:
+   - styling and placing the tracker's own window (click-through, no-activate, topmost);
+   - registering and unregistering global hotkeys;
+   - read-only queries about the game window's position, size, minimized state and whether it is in the foreground;
+   - reading controller state.
+   Update the allow-list in the test to exactly what you use, with a one-line reason for each addition in `DECISIONS.md`. Never send messages or input to the game window, and never change its style, position, focus or z-order.
+4. Never launch, close, focus or send input to the game or Steam.
+5. Do not run the tracker elevated.
+6. The tracker makes no network connections.
+7. Dependencies come from source in their official repositories, pinned to a commit. Microsoft packages are the only allowed NuGet packages. Record each license.
+8. No game data in git. Item names, descriptions, coordinates, params and images are derived at build time into `out/`. Do not put tables of game text in source or tests; tests use synthetic data.
+9. Read archives in place. Keep `work/` under 500 MB.
 
-- Native Windows, not WSL. .NET 10 SDK.
+## Environment
+
+- Native Windows. .NET 10 SDK in `deps/dotnet` (not installed system-wide); use `deps\dotnet\dotnet.exe`, `.\run-tracker.cmd`, `.\build-map.cmd`.
 - Game path (read-only): `G:\SteamLibrary\steamapps\common\DARK SOULS III`
-- `out/`, `work/`, `deps/`, `bin/`, `obj/` are gitignored.
-- Scope: High Wall of Lothric (`m30_00_00_00`) only. Do not process any other map, even as a test.
-- Do not commit or push phase 2 work; that is left to the repo owner.
-
-# Hard rules, phase 1 (copied from BRIEF.md)
-
-Phase 1 ran on WSL. Where a phase 1 rule conflicts with phase 2 (rule 2's "never run a Windows
-executable against the game" versus the read-only tracker; rule 3's "on the Linux filesystem"),
-the phase 2 rules above apply. Everything else still holds.
-
-1. Never write, move, rename, delete or unpack anything inside the game path or the mod folder. Open files there read-only.
-2. Never run a Windows executable against the game: no UXM, no Mod Engine, no launching the game or Steam.
-3. Extract only the files you need into `work/` inside this project, on the Linux filesystem (not under `/mnt/c`), and do all processing there.
-4. Before any other step, save a listing of the game path (relative path, size, modified time) to `work/game_before.txt`. At the end, save `work/game_after.txt` and diff the two. Any difference is a failure: stop and report it.
-5. Dependencies come from source in their official repositories, pinned to a commit. No prebuilt third-party binaries.
-6. Do not commit, push or publish game data or anything derived from it. Add `work/` and `out/` to `.gitignore`.
-
-Additional constraints from BRIEF.md:
-
-- Game path (read-only): `G:\SteamLibrary\steamapps\common\DARK SOULS III` (WSL: `/mnt/g/SteamLibrary/steamapps/common/DARK SOULS III`). Mod folder: none; mods are believed to be inside the game folder. Never modify or remove mod files, DLLs or the executable.
-- Do not copy the game or any whole archive into WSL; read archives in place. Keep `work/` under 500 MB; shallow-clone dependencies.
-- Scope: High Wall of Lothric (`m30_00_00_00`) only. Do not process any other map, even as a test.
-- Keep the code cross-platform: no hardcoded paths, game path from config/argument.
+- `work/`, `out/`, `deps/`, `bin/`, `obj/` are gitignored.
+- Branch for phase 3: `phase3-full-map` (from `phase2-tracker`). Commit locally as you go. Never push unless the owner asks.
+- Read `REPORT.md`, `DECISIONS.md` and `TESTING.md` before changing anything.

@@ -28,6 +28,24 @@ public class ReadOnlyGuaranteeTests
         "ntdll.dll!NtQueryInformationProcess",
         "advapi32.dll!OpenProcessToken",
         "advapi32.dll!GetTokenInformation",
+        // Phase 3, read-only queries about the game window (position, size, minimized, foreground):
+        "user32.dll!FindWindowExW",
+        "user32.dll!GetWindowThreadProcessId",
+        "user32.dll!IsWindowVisible",
+        "user32.dll!IsIconic",
+        "user32.dll!GetClientRect",
+        "user32.dll!ClientToScreen",
+        "user32.dll!GetWindowRect",
+        "user32.dll!GetForegroundWindow",
+        // Phase 3, styling and placing the tracker's own overlay window:
+        "user32.dll!GetWindowLongPtrW",
+        "user32.dll!SetWindowLongPtrW",
+        "user32.dll!SetWindowPos",
+        // Phase 3, global hotkeys delivered to the tracker's own window:
+        "user32.dll!RegisterHotKey",
+        "user32.dll!UnregisterHotKey",
+        // Phase 3, reading controller state:
+        "xinput1_4.dll!XInputGetState",
     };
 
     /// <summary>

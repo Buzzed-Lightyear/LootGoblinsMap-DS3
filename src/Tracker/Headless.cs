@@ -225,4 +225,61 @@ public static class Headless
             : $"RESULT: CHECK — finite={finite}, stable={stable} (expected a spread under 0.05 m while standing still).");
         return finite && stable ? 0 : 5;
     }
+
+    /// <summary>
+    /// Live check of the overlay placement: asks Windows where the game's client area is, puts the
+    /// (empty, transparent) overlay window over it, and reads back where the overlay really is.
+    /// Also confirms that showing the overlay did not change which window is in the foreground.
+    /// Exit code 0 equal, 2 game not running, 6 no game window, 7 rectangles differ or focus changed.
+    /// </summary>
+    public static int OverlayCheck(TextWriter output)
+    {
+        var processes = System.Diagnostics.Process.GetProcessesByName(LiveGameSource.ProcessName);
+        if (processes.Length == 0)
+        {
+            output.WriteLine("RESULT: SKIPPED — the game is not running.");
+            return 2;
+        }
+        int pid = processes[0].Id;
+        nint gameWindow = Overlay.GameWindow.Find(pid);
+        var state = Overlay.GameWindow.Query(gameWindow);
+        if (!state.Found)
+        {
+            output.WriteLine($"RESULT: no visible window found for the game (PID {pid}).");
+            return 6;
+        }
+        output.WriteLine($"game window 0x{gameWindow:X} (PID {pid}): client area {state.Client}, minimized {state.Minimized}, foreground {state.Foreground}");
+        if (state.Minimized || state.Client.IsEmpty)
+        {
+            output.WriteLine("RESULT: the game window is minimized; the overlay stays hidden and has nothing to cover.");
+            return 6;
+        }
+
+        nint foregroundBefore = Memory.NativeMethods.GetForegroundWindow();
+        var overlay = new Overlay.OverlayWindow(new System.Windows.Controls.Canvas());
+        overlay.Show();
+        Pump();
+        overlay.Cover(state.Client);
+        Pump();
+        var actual = overlay.ActualRect;
+        long style = overlay.ExtendedStyle;
+        nint foregroundAfter = Memory.NativeMethods.GetForegroundWindow();
+        var (visible, _) = OverlayLayout.Place(state);
+        overlay.Close();
+
+        bool clickThrough = (style & Memory.NativeMethods.WsExTransparent) != 0;
+        bool noActivate = (style & Memory.NativeMethods.WsExNoActivate) != 0;
+        bool sameRect = actual == state.Client;
+        bool focusKept = foregroundBefore == foregroundAfter;
+        output.WriteLine($"overlay window: {actual}; click-through {clickThrough}, no-activate {noActivate}, topmost {overlay.Topmost}");
+        output.WriteLine($"foreground window before 0x{foregroundBefore:X}, after 0x{foregroundAfter:X} → {(focusKept ? "unchanged" : "CHANGED")}");
+        output.WriteLine($"would be shown right now: {visible} (only while the game is in the foreground)");
+        output.WriteLine(sameRect && focusKept && clickThrough && noActivate
+            ? "RESULT: OK — the overlay rectangle equals the game's client rectangle."
+            : $"RESULT: CHECK — rectangles equal {sameRect}, focus kept {focusKept}, click-through {clickThrough}, no-activate {noActivate}.");
+        return sameRect && focusKept && clickThrough && noActivate ? 0 : 7;
+
+        static void Pump() =>
+            System.Windows.Threading.Dispatcher.CurrentDispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+    }
 }
