@@ -577,3 +577,19 @@ changes. Getting there took two changes: the first version redrew the whole map 
 - English text only; the language is a config value (`language`), untested for others.
 - The full map does not block game input and the overlay cannot show over exclusive fullscreen.
 - Position-only map choice (used when no map id can be read) is ambiguous for 25 map pairs.
+
+## First in-game session (owner, 2026-11-20, 15:47–15:53)
+
+The owner ran the overlay with the game and reported that visiting different bonfires and
+moving between layers "all looks good". Item pickup was not tested. `work/live_checks.log`
+from that session has four lines:
+
+- two rests at the first High Wall bonfire, 0.72 m and 0.74 m from its marker;
+- one rest at a second bonfire of the same map, 0.73 m from its marker, logged under the name
+  the game data gives it;
+- one map switch, m30_00 → m31_00, detected by the map id read from memory.
+
+So attaching, positions against two bonfire markers, bonfire and area names, the layer
+highlight, and a map switch by id are now confirmed in play. Still open: a marker disappearing
+on pickup (no flag line was logged because nothing was picked up), the hotkeys and the settings
+window, the other 18 maps, and the final `--probe` command against the game.
