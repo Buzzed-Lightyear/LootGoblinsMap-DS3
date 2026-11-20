@@ -1,4 +1,5 @@
 using System.Numerics;
+using MapCore;
 
 namespace MapBuilder.Pipeline;
 

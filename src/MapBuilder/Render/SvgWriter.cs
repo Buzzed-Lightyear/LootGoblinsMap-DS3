@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using MapBuilder.Pipeline;
+using MapCore;
 
 namespace MapBuilder.Render;
 

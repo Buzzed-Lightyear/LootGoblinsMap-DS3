@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Code shared by the map builder and the live tracker, so the two cannot drift apart:
+       the world↔pixel transform, top-down geometry, the map.json model, the navmesh polygon
+       file and the polygon/layer lookup. Plain .NET, no platform-specific code. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <RootNamespace>MapCore</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+</Project>

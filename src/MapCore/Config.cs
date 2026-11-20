@@ -1,9 +1,9 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace MapBuilder;
+namespace MapCore;
 
-/// <summary>Tool configuration. Loaded from a JSON file; game path can be overridden by CLI argument.</summary>
+/// <summary>Configuration shared by the builder and the tracker (config.json). The game path can be overridden by CLI argument.</summary>
 public sealed class Config
 {
     /// <summary>Game install root (the folder containing DarkSoulsIII.exe, or its parent).</summary>
@@ -28,8 +28,27 @@ public sealed class Config
     /// <summary>Flip the pixel Y axis (world Z → -pixel Y).</summary>
     public bool FlipZ { get; set; }
 
+    /// <summary>Clockwise quarter turns (0..3) applied to the image after the flips.</summary>
+    public int Rotation { get; set; }
+
+    [JsonIgnore]
+    public Orientation Orientation => new Orientation(FlipX, FlipZ, Rotation).Normalized();
+
     /// <summary>Vertical gap (metres) between stacked faces that forces a layer split.</summary>
     public float LayerSplitHeight { get; set; } = 1.8f;
+
+    /// <summary>
+    /// How layers are formed. "floors" (default): connected floors stay on one layer, and layers
+    /// change on stairs. "stack": the phase 1 behaviour, every polygon on the lowest layer that
+    /// has room for it, which changes layer wherever something lies underneath.
+    /// </summary>
+    public string LayerMode { get; set; } = "floors";
+
+    /// <summary>"floors" mode: largest height step (metres) across which two level areas still count as one floor.</summary>
+    public float LayerJoinStep { get; set; } = 0.6f;
+
+    /// <summary>"floors" mode: polygons no steeper than this (degrees) are level floor; steeper ones are stairs or ramps.</summary>
+    public float LayerFlatSlopeDegrees { get; set; } = 15f;
 
     [JsonIgnore]
     public string ProjectRoot { get; set; } = Directory.GetCurrentDirectory();

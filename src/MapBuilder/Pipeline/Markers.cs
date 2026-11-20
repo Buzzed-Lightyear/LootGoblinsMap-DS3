@@ -1,4 +1,5 @@
 using System.Numerics;
+using MapCore;
 using SoulsFormats;
 
 namespace MapBuilder.Pipeline;
@@ -36,7 +37,7 @@ public static class Markers
             {
                 markers.Add(new Marker
                 {
-                    Type = "bonfire",
+                    Type = MapDocument.BonfireType,
                     Name = obj.Name,
                     EntityId = obj.EntityID,
                     World = obj.Position,
@@ -55,7 +56,7 @@ public static class Markers
             }
             var m = new Marker
             {
-                Type = "treasure",
+                Type = MapDocument.TreasureType,
                 Name = $"{t.Name} ({t.TreasurePartName})",
                 EntityId = t.EventID,
                 World = part.Position,

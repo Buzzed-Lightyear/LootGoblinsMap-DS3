@@ -12,6 +12,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../MapCore/MapCore.csproj" />
   </ItemGroup>
 
 </Project>

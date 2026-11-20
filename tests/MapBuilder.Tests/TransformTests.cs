@@ -1,5 +1,5 @@
 using System.Numerics;
-using MapBuilder.Render;
+using MapCore;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace MapBuilder.Tests;

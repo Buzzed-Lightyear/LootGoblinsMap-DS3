@@ -159,3 +159,248 @@ Specifics to handle when moving:
 - The greedy layering favors a maximal connected layer 0; layers ≥ 3 are sparse tower
   floors. An alternative "strict height band" split would fragment layer 0 instead;
   the chosen trade-off reads best for a loot map.
+
+---
+
+# Phase 2 — live tracker MVP (High Wall, Windows)
+
+Date: 2026-11-20. Built and run on native Windows 11, .NET SDK 10.0.404 (in `deps/dotnet`).
+
+> Later the same day the owner ran the in-game test and the layering was changed. Where this
+> section says "not read the running game", "unverified" or "layers are stack order", read the
+> follow-up at the end of this file first.
+
+## Result in one paragraph
+
+The tracker is built and works end to end on recorded positions: map, markers, dot, trail,
+layer highlight, orientation toggles, replay and PNG export. It has **not** read the running
+game yet. The game was running during this session, but Steam was started as administrator, so
+the game was elevated and Windows refused the tracker's read-only open with "access denied".
+Hard rule 4 forbids running the tracker elevated, so the live read stopped there. Because of
+that, the **coordinate space is unverified** and the in-game test in `TESTING.md` is still to do.
+
+## What was built
+
+- **`src/MapCore`** — shared library used by both programs: the world↔pixel transform (now with
+  90° rotation), top-down geometry, the map.json model, the polygon file, the polygon/layer
+  lookup, the per-tick tracking logic (states, trail), the replay format and `Config`.
+- **`src/MapBuilder`** — now also writes `out/<map>/navpolys.bin`: every navmesh polygon's
+  world-space vertices and layer index (13,672 polygons, 711 KB). Honours `"rotation"` in
+  config.json. Layering algorithm untouched; images are the same as before the refactor.
+- **`src/Tracker`** — WPF window on `net10.0-windows`: all layers drawn together (current one
+  bright, the rest dim), bonfire and treasure markers, player dot, trail; follow, zoom,
+  fit-to-window, always-on-top; flip X / flip Z / rotate 90° with a save to config.json; debug
+  readout (attach status, game version, world x/y/z, pixel x/y, layer, distance to polygon);
+  messages for game not running, no character loaded, outside High Wall and access denied, each
+  clearing on its own. Reads 25 times a second on a background thread.
+- **Memory reading** — the DS3 patterns and offsets from SoulMemory (SoulSplitter `aeb7cbe`,
+  GPLv3), source-vendored and cut down to the player position and the "character loaded" test.
+  Upstream does not meet hard rule 2 (it opens the process with all rights and carries
+  memory-changing helpers), so those parts were left out and the tracker has its own process
+  layer that opens the game with `PROCESS_VM_READ | PROCESS_QUERY_LIMITED_INFORMATION` only.
+- **Replay** — `Tracker --replay <file>` plays a list of positions in the window;
+  `--png` renders without a window; `--make-path` writes a synthetic walk over the navmesh
+  between two bonfire markers; `--probe` is the live read check as a command.
+- `run-tracker.cmd`, `build-map.cmd`, `TESTING.md`, `LICENSE` (GPLv3), `.gitignore`.
+
+## Checks
+
+1. **Game folder snapshot identical before and after — FAIL (by the letter).**
+   186 files before and after, none added or removed, but 11 differ in size or modified time:
+   `Game/logs/` (7 log files), `Game/dxgi.ini`, `Game/SoulsUnsqueezed.ini`,
+   `Game/Version/installed.ini`, `Game/Version/repository.ini`. All eleven belong to the injected
+   mods (Special K / SoulsUnsqueezed), which rewrite them whenever the game starts. The game
+   process started at 13:39:19, the same second the before-snapshot was written; nine of the
+   eleven were last written between 13:39:20 and 13:39:28, `dxgi.log` at 13:40:44 and
+   `steam_api.log` at 13:52:29 while the game ran. Nine of them had already changed once between
+   two read-only listings taken 40 seconds apart at the very start of the session, before any
+   project code had opened a file in the game folder. Every game data file (`Data*.bhd/.bdt`,
+   the executable, DLLs) is unchanged. Nothing in this project writes to the game path: the
+   builder opens the archives read-only, and the tracker's read-only open of the process was
+   refused. As a control, a snapshot taken after the game had closed and another taken after a
+   further full map build and all remaining work are identical to each other. The diff is in
+   `work/game_diff.txt`. To get a clean result, repeat the two snapshots with the game closed.
+2. **`dotnet build` and `dotnet test` from a clean checkout — PASS.** The source tree (tracked
+   and untracked files, nothing ignored; no `bin/`, `obj/`, `out/`, `work/`, `deps/`) was copied to
+   an empty folder: build 0 errors, 49/49 tests pass (34 in `MapBuilder.Tests`, 15 in
+   `Tracker.Tests`). The 3 build warnings are in the phase 1 vendored SoulsFormats code.
+3. **Unit tests for lookup and pixel parity — PASS.**
+   - Polygon and layer lookup (`CoreTests`, 9 tests): stacked floors pick the smallest vertical
+     distance; the layer comes from the polygon, not the height; ramps measure to the sloped
+     surface; nearest within 3 m in 3D and nothing beyond; the far-above refinement and its
+     fallback; non-finite input; and 2,000 random points on a 400-polygon mesh agreeing with a
+     brute-force scan.
+   - Builder and tracker pixels (`PixelParityTests`, 3 tests): the builder's real export is run
+     on a synthetic map in all 16 flip/rotation combinations and loaded the way the tracker
+     loads it. Marker pixels stored by the builder equal the tracker's within 1e-9 px; 500
+     random world points per orientation are identical; re-orienting in the tracker equals what
+     a rebuild with the saved config produces; standing on a marker puts the dot on the
+     marker's pixel and layer.
+   - Also covered: polygon file round trip, rotation semantics, config save keeping comments,
+     replay parsing, tracking states and trail breaks, and the vendored pointer code against a
+     fake process image.
+4. **Source scan for banned APIs — PASS.** `ReadOnlyGuaranteeTests` (6 tests):
+   - 31 files under `src/Tracker` and `src/MapCore` (code, comments, docs) contain none of 37
+     banned names, including the four named in hard rule 2 and their relatives (allocation,
+     protection, remote threads, library loading, hooks, debugging, input, focus, process start
+     and stop, and the wider access masks).
+   - Native imports, in source and in the compiled `Tracker.dll`, are exactly these eight:
+     `OpenProcess`, `ReadProcessMemory`, `CloseHandle`, `GetExitCodeProcess`,
+     `QueryFullProcessImageNameW` (kernel32), `NtQueryInformationProcess` (ntdll),
+     `OpenProcessToken`, `GetTokenInformation` (advapi32). `MapCore.dll` has none.
+   - The open call is private and has two call sites, with masks 0x1010 (read + limited query)
+     and 0x1000 (limited query only, used to explain an access-denied).
+   - Neither assembly references a networking assembly or type (hard rule 5), nor the managed
+     `Process` members that start, stop or over-open a process.
+5. **Replay mode — PASS.** A 235.5 m synthetic walk over the navmesh between bonfire 3001950
+   and bonfire 3001955 (479 positions) was replayed and rendered. All 479 positions tracked,
+   477 inside a polygon, largest distance to the located polygon 0.13 m, layers visited 0, 1, 2
+   and 3. The PNGs were opened and checked: follow view and whole-map view show the floor plan,
+   the current layer bright with the others dim, treasure and bonfire markers, the trail from
+   one bonfire circle to the other, and the dot sitting on the destination bonfire. A third
+   render with flip X and a 90° turn shows map, markers, dot and trail turned together. The
+   real window was also captured in live mode (showing "Dark Souls III is not running") and in
+   replay mode.
+6. **Live read — NOT DONE.** While the game ran (PID 15896), the tracker's read-only open
+   returned access denied. A query-only check showed why: `steam.exe` and `DarkSoulsIII.exe`
+   were both elevated (integrity level High) while the tracker ran unelevated, as required.
+   No position was read, so "finite and stable" and "within 3 m of a bonfire marker" are
+   untested. By the time the tracker was finished the game had been closed; `Tracker --probe`
+   then reports "SKIPPED — the game is not running".
+
+## Not verified without the owner
+
+- **That the position reads at all on this game build.** The scan patterns are SoulMemory's and
+  were only exercised against a synthetic process image in tests.
+- **Coordinate space.** Whether the position from memory is in the same space as the MSB and
+  navmesh coordinates. Nothing is assumed or corrected in code; the first look at the tracker
+  with the character on a bonfire settles it (`TESTING.md` step 2).
+- **Orientation.** Mirroring and rotation against the game (`TESTING.md` step 3).
+- **Layer highlight in real movement**, especially stairs and ladders (`TESTING.md` step 4).
+- **Detected game version** string, and the "no character loaded" state on the title screen.
+
+## Known issue: layers are stack order, not floors
+
+Unchanged from phase 1, as instructed. A layer is "the lowest surface at this spot, then the
+second lowest, and so on", not a connected storey. Height ranges overlap heavily (layer 0 spans
+y −90.0…56.1, layer 2 spans −44.6…47.3), so a layer cannot be chosen from the player's height;
+the tracker takes it from the navmesh polygon under the player. Visible consequence: walking
+along one storey can switch the highlighted layer wherever something lies underneath (the
+replayed walk between two bonfires on the same level passes through layers 0, 1, 2 and 3), and
+the bright layer is a patchwork rather than one floor.
+
+## Open issues
+
+- Steam runs elevated on this machine. Until it is started normally the tracker cannot attach.
+- Check 1 needs a rerun with the game closed for a clean diff.
+- "Outside High Wall" is decided geometrically (no polygon within 12 m), not from the game's
+  current map id. Another area whose coordinates overlap High Wall's would not be detected.
+- The navmesh contains a few stray pieces away from the main map (a large triangle north of it
+  and a cluster of small ones to the east, visible in the whole-map view). They are in the
+  vanilla data and also widen the image bounds.
+- Bonfire markers have entity ids but no names; the data does not say which is which.
+- 3 of the 5 real bonfires are on navmesh pieces that share no corners with the first two, so
+  the synthetic path generator falls back to a straight line for them.
+- The attach copies the game's whole main module once to find the player pointer. Its duration
+  on the real game is unmeasured.
+- `deps/` is now about 790 MB, almost all of it the .NET SDK. `work/` is 7 MB.
+- The git identity fix is local only; see the final message of the session for the push command.
+
+## Vendored code and licenses (addition)
+
+| Source | Commit | License | Used for |
+|---|---|---|---|
+| FrankvdStam/SoulSplitter (`src/SoulMemory`) | `aeb7cbe` | **GPLv3** | DS3 player-position scan patterns and offsets, pointer resolution (source-vendored subset, read-only) |
+
+Provenance and every local change: `src/Tracker/ThirdParty/SoulMemory/PROVENANCE.md`. The
+repository now carries the GPLv3 text in `LICENSE`. NuGet packages: the Microsoft test platform
+only, as in phase 1.
+
+---
+
+# Phase 2 follow-up — in-game result and connected-floor layers
+
+Date: 2026-11-20, after the owner restarted Steam without administrator rights.
+
+## In-game result (reported by the owner)
+
+- The tracker attached and tracked; "everything checks out". No orientation change was saved
+  (`config.json` still has no flips and no rotation).
+- At the High Wall of Lothric bonfire the readout showed world x −18.6, y 41.23, z −14.44. The
+  bonfire marker with entity id 3001950 is at (−19.244, 41.207, −14.783): **0.73 m apart**
+  (0.64 m in x, 0.02 m in y, 0.34 m in z). The position read from memory is therefore in the
+  same space as the MSB and navmesh coordinates, with no offset. This closes the
+  "coordinate space" item and identifies 3001950 as the High Wall of Lothric bonfire.
+- Finding: the highlighted layer changed in places where the floor only has a tiny step.
+
+Not re-measured by me: the game was closed again by the time of this follow-up, so
+`Tracker --probe` still reports "game not running". The numbers above are the owner's reading.
+
+## Why the layer changed over tiny steps
+
+The phase 1 splitter placed every polygon on its own: "the lowest layer where nothing over or
+under me is too far away". A storey therefore changed layer wherever something happened to lie
+beneath it, even between two polygons sharing an edge. Measured on the High Wall navmesh:
+**4,291 seams**, a seam being two polygons that touch in top-down view with less than 0.6 m of
+step and sit on different layers; about 3,600 of them had no step at all.
+
+## What changed
+
+New splitter `src/MapBuilder/Pipeline/FloorLayering.cs`, now the default (`"layerMode": "floors"`
+in config.json; `"stack"` brings the old behaviour back):
+
+1. **Links.** Polygons whose outlines touch in top-down view (within 0.3 m, or one reaching into
+   the other) with a small height step are linked. This also joins separately placed navmesh
+   pieces that share no corners.
+2. **Level patches.** Polygons no steeper than 15° that are linked with at most 0.6 m of step
+   form one patch (a floor, a landing, a deck). A patch is never cut apart.
+3. **Regions.** From the lowest unclaimed piece, always taking the lowest reachable piece next,
+   a region grows until it would come to lie over itself (more than 1.8 m apart). So the cut
+   falls on stairs, not in the middle of a floor.
+4. **Layers.** Regions that lie over each other never share a layer; otherwise a region goes
+   where the regions it touches are.
+5. **Refinement.** Single pieces (a patch as a whole, or one stair polygon) move to the layer
+   most of their neighbours are on when nothing there lies over or under them.
+
+The phase 1 guarantee is kept and now checked on every build: no layer lies over itself.
+
+## Result
+
+| | stack order (before) | connected floors (now) |
+|---|---|---|
+| Layers | 7 | 7 |
+| Seams (touching, under 0.6 m step, different layers) | 4,291 | 525 |
+| … of them with no step at all (under 5 cm) | 3,631 | 430 |
+| … of them between two level polygons | not measured | **0** |
+| … of them between a floor and a stair/ramp polygon | not measured | 397 |
+| … of them between two stair/ramp polygons | not measured | 128 |
+| Layer changes on the 235 m replayed walk between bonfires 3001950 and 3001955 | 17 | 3 |
+| Stacked pairs within one layer | 0 | 0 |
+
+The 525 seams that remain are where a floor meets its stairs or part-way up a flight: places
+where the layer has to change because the two floors lie over each other.
+
+Checks rerun after the change:
+
+- `dotnet build` / `dotnet test` from a clean copy of the source: 0 errors, 55/55 tests
+  (40 in `MapBuilder.Tests`, 15 in `Tracker.Tests`). Six new tests in `LayeringTests.cs`: a
+  walkway partly over a room stays one layer; a 20 cm step between separate pieces does not
+  change the layer; stairs back over their own floor change layer once, on the stairs; a tilted
+  polygon inside a floor goes with that floor; random meshes never produce a layer that lies
+  over itself.
+- Builder acceptance checks 2–5: pass, unchanged (71/77 markers within 2 m of their layer).
+- Replay: rendered and looked at; the bright layer under the player is now one clean floor.
+- Read-only scan: unchanged, passes (the tracker was not touched apart from one summary line).
+- Game folder snapshot before and after this follow-up (game closed throughout): **identical**,
+  186 files, empty diff (`work/game_before_2.txt`, `work/game_after_2.txt`).
+
+## Still open
+
+- Whether the remaining layer changes fall in sensible places in the game (top or bottom of
+  stairs, ladders). The 525 are counted, not walked.
+- A layer is still a set of floors that do not overlap, not one storey: several unconnected
+  floors share each layer and light up together.
+- Layer numbers changed with the new splitter; anything that stored the old numbers is stale.
+  `out/` was regenerated; restart the tracker to load it.
+- The other open issues listed above (geometric "outside High Wall", stray navmesh pieces,
+  unnamed bonfires, the unpushed identity fix) are unchanged.

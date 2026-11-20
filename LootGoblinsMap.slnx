@@ -1,8 +1,11 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/MapBuilder/MapBuilder.csproj" />
+    <Project Path="src/MapCore/MapCore.csproj" />
+    <Project Path="src/Tracker/Tracker.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/MapBuilder.Tests/MapBuilder.Tests.csproj" />
+    <Project Path="tests/Tracker.Tests/Tracker.Tests.csproj" />
   </Folder>
 </Solution>

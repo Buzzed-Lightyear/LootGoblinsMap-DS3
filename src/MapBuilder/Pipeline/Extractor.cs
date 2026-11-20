@@ -1,5 +1,6 @@
 using MapBuilder.Archive;
 using MapBuilder.Mods;
+using MapCore;
 using SoulsFormats;
 
 namespace MapBuilder.Pipeline;

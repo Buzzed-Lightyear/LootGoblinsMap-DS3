@@ -1,5 +1,6 @@
 using System.Numerics;
 using MapBuilder.Pipeline;
+using MapCore;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace MapBuilder.Tests;

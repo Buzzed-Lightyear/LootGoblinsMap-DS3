@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using MapBuilder.Checks;
+using MapCore;
 using MapBuilder.Mods;
 using MapBuilder.Pipeline;
 
@@ -12,6 +13,8 @@ internal static class Program
     {
         // Shift-JIS support for the vendored SoulsFormats readers.
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        // MSB names are Japanese; make them survive a Windows console.
+        try { Console.OutputEncoding = Encoding.UTF8; } catch (IOException) { /* output is not a console */ }
 
         try
         {

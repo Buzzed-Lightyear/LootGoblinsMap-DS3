@@ -1,14 +1,24 @@
 {
   // Game install root (the folder containing Game/DarkSoulsIII.exe, or the Game folder itself).
-  // On Windows this would be e.g. "G:\\SteamLibrary\\steamapps\\common\\DARK SOULS III".
-  "gamePath": "/mnt/g/SteamLibrary/steamapps/common/DARK SOULS III",
+  // From WSL the same folder is "/mnt/g/SteamLibrary/steamapps/common/DARK SOULS III".
+  "gamePath": "G:\\SteamLibrary\\steamapps\\common\\DARK SOULS III",
   // External mod override folder, or null — this install has mods inside the game folder.
   "modPath": null,
   "mapId": "m30_00_00_00",
   "outDir": "out",
   "workDir": "work",
   "pixelsPerMeter": 6.0,
+  // Orientation of the map image. The tracker's "Save orientation" button rewrites these three.
   "flipX": false,
   "flipZ": false,
-  "layerSplitHeight": 1.8
+  "rotation": 0,
+  // Layers. "floors": a connected floor stays on one layer and the layer changes on stairs.
+  // "stack": the phase 1 behaviour (each polygon on the lowest layer with room for it).
+  "layerMode": "floors",
+  // Surfaces stacked further apart than this (metres) can never share a layer.
+  "layerSplitHeight": 1.8,
+  // "floors" only: largest step (metres) across which two level areas still count as one floor.
+  "layerJoinStep": 0.6,
+  // "floors" only: polygons no steeper than this (degrees) are level floor, steeper ones stairs/ramps.
+  "layerFlatSlopeDegrees": 15
 }
