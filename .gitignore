@@ -4,3 +4,8 @@ deps/
 bin/
 obj/
 artifacts/
+
+# Agent instruction files: kept locally, not part of the repository.
+/CLAUDE.md
+/.claude/
+/docs/history/BRIEF*.md

@@ -17,7 +17,7 @@ public readonly record struct Orientation(bool FlipX, bool FlipZ, int Rotation)
 
 /// <summary>
 /// One shared world→pixel transform for the whole map, used by both the builder and the tracker.
-/// Axis convention (documented in map.json and REPORT.md), applied in this order:
+/// Axis convention (documented in map.json and docs/map-pipeline.md), applied in this order:
 ///   1. pixel X = (world X - OriginX) * Scale,  pixel Y = (world Z - OriginZ) * Scale
 ///   2. FlipX mirrors pixel X, FlipZ mirrors pixel Y (inside the unrotated image)
 ///   3. the image is rotated clockwise by Rotation quarter turns

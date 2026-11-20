@@ -24,7 +24,7 @@ public readonly record struct LocateResult(LocateKind Kind, int PolygonIndex, in
 ///
 /// Rule (BRIEF-PHASE2): the polygon that contains the point in top-down view with the smallest
 /// vertical distance; otherwise the nearest polygon within <see cref="Reach"/> (3 m).
-/// One refinement, logged in DECISIONS.md: when the best containing polygon is more than
+/// One refinement, logged in docs/history/DECISIONS.md: when the best containing polygon is more than
 /// <see cref="Reach"/> away vertically (the player is on geometry without navmesh above or
 /// below a floor), a polygon within reach in 3D wins over it. With nothing in reach, the
 /// containing polygon is still returned and its large distance tells the caller how far off it is.

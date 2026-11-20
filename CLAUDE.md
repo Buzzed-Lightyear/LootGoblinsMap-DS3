@@ -1,6 +1,6 @@
 # Rules for all work in this repo
 
-Consolidated from BRIEF-PHASE3.md, with the rule changes of BRIEF-PHASE4.md at the end. This
+Consolidated from docs/history/BRIEF-PHASE3.md, with the rule changes of docs/history/BRIEF-PHASE4.md at the end. This
 supersedes the phase 1 and phase 2 rules that used to be in this file, including "High Wall only"
 and "do not commit".
 
@@ -11,7 +11,7 @@ and "do not commit".
    - registering and unregistering global hotkeys;
    - read-only queries about the game window's position, size, minimized state and whether it is in the foreground;
    - reading controller state.
-   Update the allow-list in the test to exactly what you use, with a one-line reason for each addition in `DECISIONS.md`. Never send messages or input to the game window, and never change its style, position, focus or z-order.
+   Update the allow-list in the test to exactly what you use, with a one-line reason for each addition in `docs/history/DECISIONS.md`. Never send messages or input to the game window, and never change its style, position, focus or z-order.
 4. Never launch, close, focus or send input to the game or Steam.
 5. Do not run the tracker elevated.
 6. The tracker makes no network connections.

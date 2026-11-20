@@ -32,7 +32,7 @@ public sealed class MapData
     {
         string jsonPath = Path.Combine(mapDirectory, MapDocument.FileName);
         if (!File.Exists(jsonPath))
-            throw new FileNotFoundException($"'{jsonPath}' not found. Run the map builder first (see TESTING.md).", jsonPath);
+            throw new FileNotFoundException($"'{jsonPath}' not found. Run the map builder first (see docs/development.md).", jsonPath);
         var doc = MapDocument.Load(jsonPath);
 
         string polyPath = Path.Combine(mapDirectory, string.IsNullOrEmpty(doc.NavPolygons) ? NavPolyFile.FileName : doc.NavPolygons);

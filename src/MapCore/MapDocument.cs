@@ -170,7 +170,7 @@ public sealed class MapDocument
             PixelY = t.FlipZ ? "-worldZ" : "+worldZ",
             Up = "worldY (not projected)",
             Note = "pixelX/pixelY describe the image before rotation; it is then turned clockwise by 'rotation' quarter turns. " +
-                   "Check the orientation against the running game with the tracker (TESTING.md).",
+                   "Check the orientation against the running game with the tracker (docs/development.md).",
             FlipX = t.FlipX,
             FlipZ = t.FlipZ,
             Rotation = t.Rotation,

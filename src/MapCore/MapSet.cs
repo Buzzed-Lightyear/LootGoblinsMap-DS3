@@ -44,7 +44,7 @@ public sealed class MapSet
             return Single(MapData.Load(single));
 
         throw new FileNotFoundException(
-            $"No built maps found in '{outRoot}' (no {MapIndex.FileName}). Run the map builder first (see TESTING.md).", indexPath);
+            $"No built maps found in '{outRoot}' (no {MapIndex.FileName}). Run the map builder first (see docs/development.md).", indexPath);
     }
 
     /// <summary>A set of one map that is already in memory (tests, single-map output).</summary>
