@@ -1,0 +1,89 @@
+name: Release
+
+# A pushed tag v1.2.3 (or v1.2.3-alpha.1) builds, tests, packages and publishes a GitHub
+# release. Release files are only ever built here, from the repository: the runner has no
+# game files, so a release cannot contain game data. A tag with a hyphen is a pre-release.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write   # to create the release; nothing else
+
+env:
+  DOTNET_NOLOGO: "1"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      # GitHub-owned actions only, pinned to a commit.
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Version from the tag
+        id: version
+        shell: pwsh
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          if ($tag -notmatch '^v\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') { throw "Tag '$tag' is not of the form v1.2.3 or v1.2.3-label." }
+          $version = $tag.Substring(1)
+          $prerelease = if ($version.Contains('-')) { 'true' } else { 'false' }
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "prerelease=$prerelease" >> $env:GITHUB_OUTPUT
+          Write-Host "version $version, pre-release $prerelease"
+
+      - name: Game-data guard
+        shell: pwsh
+        run: ./tools/check-no-game-data.ps1
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Build
+        run: dotnet build LootGoblinsMap.slnx -c Release
+
+      - name: Test
+        run: dotnet test LootGoblinsMap.slnx -c Release --no-build
+
+      - name: Package, check and smoke-test
+        shell: pwsh
+        run: ./tools/package.ps1 -Version "${{ steps.version.outputs.version }}"
+
+      - name: Create the GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+        run: |
+          $zip = Get-Item "artifacts/LootGoblinsMap-$($env:TAG)-win-x64.zip"
+          $sum = Get-Item "$($zip.FullName).sha256"
+          $hash = (Get-Content $sum.FullName -Raw).Split(' ')[0]
+          $notes = @"
+          Unofficial, read-only loot map overlay for Dark Souls III. Windows 10/11, 64-bit; nothing else to install.
+
+          **Install:** download ``$($zip.Name)``, unzip it anywhere outside the game folder, and start ``LootGoblinsMap.exe`` (not as administrator). The first run builds the maps from your own game files. See ``README.txt`` in the zip.
+
+          **SHA-256** of ``$($zip.Name)``:
+          ``$hash``
+
+          What changed: see [CHANGELOG.md](https://github.com/$($env:GITHUB_REPOSITORY)/blob/$($env:TAG)/CHANGELOG.md).
+
+          This release was built by GitHub Actions from the tagged source. It contains no game files.
+          "@
+          $notes | Set-Content -Path release-notes.md -Encoding utf8
+          $flags = @('--verify-tag', '--title', "Loot Goblins Map $env:VERSION", '--notes-file', 'release-notes.md')
+          if ($env:PRERELEASE -eq 'true') { $flags += '--prerelease' }
+          gh release create $env:TAG $zip.FullName $sum.FullName --repo $env:GITHUB_REPOSITORY @flags
+          if ($LASTEXITCODE -ne 0) { throw "gh release create failed" }
