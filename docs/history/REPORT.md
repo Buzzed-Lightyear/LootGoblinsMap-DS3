@@ -593,3 +593,133 @@ So attaching, positions against two bonfire markers, bonfire and area names, the
 highlight, and a map switch by id are now confirmed in play. Still open: a marker disappearing
 on pickup (no flag line was logged because nothing was picked up), the hotkeys and the settings
 window, the other 18 maps, and the final `--probe` command against the game.
+
+---
+
+# Phase 4 report: an installable release (2026-11-20)
+
+## Result in one paragraph
+
+Loot Goblins Map is now one program that a player can download and run. Two pre-releases
+were built and published by GitHub Actions from the repository: `v0.1.0-alpha.1` and
+`v0.1.0-alpha.2`. Each was downloaded into an empty folder, checked against its published
+hash, smoke-tested without the game, and then run for the first time against the real game:
+it found the game through Steam and built all 20 maps in under 14 seconds. CI is green on
+`main`. The game folder is unchanged. Two things are open: the project page needs one
+repository setting that only the owner can change, and the live checks could not run because
+the game was not running at any point in the phase. The optional tail (bosses, controller
+bindings) was not started.
+
+Release: https://github.com/Buzzed-Lightyear/LootGoblinsMap-DS3/releases/tag/v0.1.0-alpha.2
+
+## What was built
+
+**Before the first release (the owner's amendments)**
+
+- A map id read from memory that is not one of the game's map ids is treated as an
+  unsupported game build: the position decides where exactly one area fits, and the overlay,
+  the debug readout and the main window say so.
+- The 6 treasures with no walkable polygon in reach are now shown, on the layer nearest in
+  height. No treasure is left without a layer (857 treasures, 80 bonfires, 20 maps).
+- Shields, catalysts and ammunition are their own categories: consumables 228, upgrade
+  materials 200, souls 149, rings 79, weapons 62, armor 44, key items 33, shields 24,
+  spells 22, catalysts 10, ammunition 6.
+- DLC areas stay in. A build with the DLC archives left out was run to check the other case:
+  16 maps built, the app says that no DLC archives were found, and everything else works.
+
+**Part A, the app.** `LootGoblinsMap.exe` with the builder inside; a launcher window; first
+run with Steam detection, folder picker fallback, progress bar and recorded build time;
+rebuild offer when the archives change, and a rebuild button; clear messages for an elevated
+game or Steam, exclusive fullscreen, an unsupported game build and missing DLC archives; the
+version from the git tag in the title bar and the settings window; feedback hotkey, feedback
+export, "open data folder". Everything of its own lives in `%LocalAppData%\LootGoblinsMap`.
+
+**Part B, CI and releases.** Three workflows (`ci.yml`, `release.yml`, `pages.yml`), GitHub's
+own actions pinned to commits, smallest permissions, built-in token only; a game-data guard;
+packaging and smoke-test scripts that CI and the release both run.
+
+**Part C, documents.** A README for players; technical pages under `docs/`; the phase reports
+moved to `docs/history/`; `CHANGELOG.md`; `THIRD-PARTY-NOTICES.md`; a one-file project page
+in `site/`. All pictures are renders of a made-up demo area.
+
+**Part D, themes.** A theme file format; "parchment" (default) and "plain"; washes and ink
+outlines, faded lower layers, shadows under upper layers, step lines on stairs, paper grain
+and vignette, a round minimap, original category and bonfire icons, the bundled EB Garamond,
+and an area-name banner on a map switch.
+
+**Not done.** Bosses and Part E (controller bindings): the optional tail, see "Open issues".
+
+## Checks
+
+| # | Check | Result |
+| --- | --- | --- |
+| 1 | Game folder unchanged | **Pass.** 203 files before and after, no difference at all, including the files the game's mods usually rewrite (the game did not run). |
+| 2 | Build and test from a clean checkout, locally and in CI | **Pass.** 108 tests (85 + 23) pass locally and on GitHub's Windows runner; CI is green on `phase4-release`, on `main` and on both tags. |
+| 3 | Read-only scan, banned list unchanged | **Pass.** 128 source files in the app, the shared library and the builder scanned for the same 37 banned names: 0 hits. The compiled app imports exactly the same 22 native functions as in phase 3; the other two assemblies import none; no networking is referenced. No native function was added in this phase. |
+| 4 | Released zip passes the smoke test and contains license and notices | **Pass**, for both releases. Hash verified, version reported correctly, demo maps built, a replay rendered in both themes as minimap and full map, feedback zip exported. |
+| 5 | First run from the released zip into a fresh data folder | **Pass**, for both releases: game found through Steam's library list, 20 of 20 maps built and passing their checks, 13.7 s (alpha.1) and 13.8 s (alpha.2), time recorded and shown in the main window. Run with the windowless first run (`--build-maps`), which is the same code the window runs; the window itself was opened once from the release and showed the result. |
+| 6 | No game data in git or in the release | **Pass.** The guard passes on the 179 tracked files and on the unpacked zip. Zip contents below. |
+| 7 | Every link in the README, `docs/` and the project page resolves | **Pass.** 51 relative links and images, 9 external links (all HTTP 200). |
+| 8 | Theme renders reviewed | **Done.** Demo area in both themes (minimap, full map on two layers, map alone) and two real areas (kept in `work\appdata\review`, not in the repository). The review led to six changes, listed in the decision log. |
+| 9 | Live checks with the packaged app | **Not run. The game was not running** at the start of the phase, at the end, or in between. Nothing in this phase has been seen against the live game. |
+
+**Zip contents** (`LootGoblinsMap-v0.1.0-alpha.2-win-x64.zip`, 54 MB):
+
+```text
+LootGoblinsMap.exe                      61.8 MB   the program, .NET runtime included
+README.txt                                        the short readme
+LICENSE.txt                                       GPL version 3
+THIRD-PARTY-NOTICES.md
+Fonts\EBGaramond-Medium.ttf                       the bundled font
+Fonts\OFL.txt                                     its license
+licenses\PROVENANCE-SoulsFormats.md               what was vendored, and from where
+licenses\PROVENANCE-SoulMemory.md
+```
+
+SHA-256 of the alpha.2 zip: `077b4c6bef0e9e576962caad2779987da44f05c132ea96991bcacae543b85690`.
+SHA-256 of the alpha.1 zip: `712369011e9e20d9936d9e99264b842807a3813b78bd284eac0ea480c7c2590b`.
+
+## What went wrong on the way
+
+- **The first CI run failed.** GitHub's hosted runners are administrator accounts and the app
+  refuses to run as administrator, so the smoke test stopped there. The app was left as it
+  is. On an administrator account the smoke test now checks the version, the shipped files
+  and that the app refuses; the rendering is covered on the runner by the test suite, and the
+  full smoke test was run here, on a normal account, against each released zip.
+- **Alpha.1 would have frozen a user's theme.** It wrote the built-in themes into the user's
+  themes folder and then preferred those files, so a later version's look would never have
+  arrived. Alpha.2 keeps the built-in themes as reference copies and only a user's own file
+  overrides them. Alpha.1 was public for about an hour.
+- **A push hung** in the credential manager's account picker, which is not visible to me.
+  Naming the repository owner in the push address avoided it. Nothing was forced.
+- **A slip with the agent files.** The first commit meant to remove `CLAUDE.md` from the
+  repository left it tracked; the next commit removed it. It is in those two pushed commits
+  and in the history before them.
+
+## For the owner to do by hand
+
+1. **Enable the project page.** In the repository: Settings, Pages, "Build and deployment",
+   Source = **GitHub Actions**. Then re-run the "Pages" workflow (Actions, Pages, "Run
+   workflow"). The first run failed with "Get Pages site failed ... verify that the
+   repository has Pages enabled", which is this setting.
+2. **Play test with the release**, see `TESTING.md` here. The one thing still unconfirmed
+   from phase 3 is a marker disappearing when its item is picked up.
+3. **Run the live checks** with the game running: `LootGoblinsMap.exe --probe --out probe.txt`
+   and `LootGoblinsMap.exe --overlay-check --out overlay.txt`.
+
+## Open issues
+
+- Nothing in phase 4 has run against the live game (check 9).
+- The project page is not published until the setting above is changed.
+- Bosses and controller bindings (the optional tail) are not done. Bosses need their
+  positions, names and defeat flags derived from the game's tables at build time; no such
+  table may be written into the source.
+- The program is not code-signed, so Windows asks before the first run.
+- The release is about 54 MB because it carries the .NET runtime.
+- Exclusive fullscreen is recognised from the game's settings file, not from the running
+  game, so a change made in the game shows up after the game has written that file.
+- One game version (1.15.2) is tested. The unsupported-build path is covered by tests on
+  synthetic data only.
+- Item and place names are English only.
+- The history before phase 4 still contains `CLAUDE.md` and the phase briefs; pushed history
+  is not rewritten.
